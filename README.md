@@ -31,6 +31,8 @@ AI_Skills/
 | `improve-animations` | emilkowalski/skills | Аудит анимаций в коде, план улучшений |
 | `animation-vocabulary` | emilkowalski/skills | Точный словарь для описания анимаций |
 | `apple-design` | emilkowalski/skills | Принципы Apple HIG для веба |
+| `presentation-creator` | [getsentry/skills](https://github.com/getsentry/skills) | Генератор презентаций: React+Vite+Recharts → один самодостаточный HTML-файл, аккуратный визуал и графики только на реальных данных |
+| `presentation-design` | [jwynia/agent-skills](https://github.com/jwynia/agent-skills) | Не генератор, а фреймворк ревью: оценка ясности, визуальной иерархии и когнитивной нагрузки готовой презентации (любой инструмент — reveal.js/PowerPoint/Keynote) |
 
 ### `skills/engineering/`
 | Скилл | Источник | Для чего |
