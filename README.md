@@ -53,8 +53,35 @@ npx skills add <твой-github>/AI_Skills
 ```
 CLI сам обнаружит скиллы по пути `skills/<category>/<name>/SKILL.md` и предложит выбрать, что ставить и куда (глобально/в проект).
 
-### Веб-версия (claude.ai/code) — доступно во всех новых чатах
-Каждая веб-сессия — свежий контейнер, локальный `~/.claude/skills/` туда не попадает. Решение — **SessionStart hook**, который при старте любой веб-сессии клонирует этот репозиторий и копирует `skills/*` в `~/.claude/skills/`.
+### Веб-версия (claude.ai/code) — доступно во всех новых чатах, в любом репозитории
+
+Каждая веб-сессия — свежий контейнер, локальный `~/.claude/skills/` туда не попадает. Решение — **SessionStart hook** (`.claude/hooks/sync-ai-skills.sh` + `.claude/settings.json` в этом репозитории): при старте любой веб-сессии он клонирует/обновляет `AI_Skills` и копирует все `skills/<category>/<name>/` в `~/.claude/skills/`. На локальной машине хук — no-op (проверяет `CLAUDE_CODE_REMOTE`).
+
+**Чтобы это работало и в других твоих репозиториях** (не только в `AI_Skills`), скопируй туда те же два файла:
+
+```bash
+mkdir -p .claude/hooks
+curl -fsSL https://raw.githubusercontent.com/Ejokey/AI_Skills/main/.claude/hooks/sync-ai-skills.sh \
+  -o .claude/hooks/sync-ai-skills.sh
+chmod +x .claude/hooks/sync-ai-skills.sh
+```
+
+и добавь в `.claude/settings.json` этого репо (создай, если его ещё нет; если уже есть — слей `hooks` вручную):
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/sync-ai-skills.sh" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Закоммить и запушь в дефолтную ветку репозитория — после этого **любая новая веб-сессия по этому репо** подтягивает актуальный набор скиллов из `AI_Skills` автоматически, без ручной установки. Обновил скилл в `AI_Skills` — в следующей веб-сессии (в любом репо с этим хуком) он уже доступен.
 
 ## Документация среды
 
