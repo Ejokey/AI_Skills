@@ -10,7 +10,8 @@
 AI_Skills/
 ├── skills/
 │   ├── design/          # дизайн, анимации, UI-полировка
-│   └── engineering/      # поиск и установка скиллов
+│   ├── engineering/      # поиск и установка скиллов
+│   └── marketing/         # позиционирование, копирайтинг, описания продукта
 ├── docs/                 # инструкции по среде (например, установка на старый iMac)
 └── README.md
 ```
@@ -38,6 +39,15 @@ AI_Skills/
 | Скилл | Источник | Для чего |
 |---|---|---|
 | `find-skills` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Поиск и установка новых скиллов из каталогов |
+
+### `skills/marketing/`
+| Скилл | Источник | Для чего |
+|---|---|---|
+| `positioning-messaging` | [refoundai/lenny-skills](https://github.com/refoundai/lenny-skills) | Фреймворк позиционирования (58 продуктовых лидеров): аудитория → отличие от альтернатив → сообщение. Применять ДО написания текста |
+| `copywriting` | [coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills) | Конверсионные тексты: слоганы, полные описания — специфичность, выгоды вместо фич, CTA-формулы |
+| `product-description-generator` | [nexscope-ai/ecommerce-skills](https://github.com/nexscope-ai/ecommerce-skills) | Раскладывает готовый месседж по полям листинга: тайтл, буллеты, полное описание, ключевые слова |
+
+Для формы «описание приложения в маркетплейсе» (название/слоган/полное описание/ключевые слова) — использовать все три по порядку: сначала `positioning-messaging` (в чём суть и отличие), потом `copywriting` (сильный текст), потом `product-description-generator` (разложить по конкретным полям).
 
 ## Установка
 
