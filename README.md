@@ -39,6 +39,7 @@ AI_Skills/
 | Скилл | Источник | Для чего |
 |---|---|---|
 | `find-skills` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Поиск и установка новых скиллов из каталогов |
+| `agent-browser` | [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) | CLI для браузерной автоматизации: навигация, формы, скриншоты, скрапинг, тестирование веб-приложений |
 
 ### `skills/marketing/`
 | Скилл | Источник | Для чего |
