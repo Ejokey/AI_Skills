@@ -40,6 +40,7 @@ AI_Skills/
 |---|---|---|
 | `find-skills` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Поиск и установка новых скиллов из каталогов |
 | `agent-browser` | [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) | CLI для браузерной автоматизации: навигация, формы, скриншоты, скрапинг, тестирование веб-приложений |
+| `deep-research` | [199-biotechnologies/claude-deep-research-skill](https://github.com/199-biotechnologies/claude-deep-research-skill) | Глубокое многошаговое исследование темы: поиск по источникам с трекингом цитат, проверка утверждений, структурированный отчёт (Markdown + HTML/PDF, таблицы источников и claims) |
 
 ### `skills/marketing/`
 | Скилл | Источник | Для чего |
