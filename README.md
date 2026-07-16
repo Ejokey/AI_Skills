@@ -48,8 +48,13 @@ AI_Skills/
 | `positioning-messaging` | [refoundai/lenny-skills](https://github.com/refoundai/lenny-skills) | Фреймворк позиционирования (58 продуктовых лидеров): аудитория → отличие от альтернатив → сообщение. Применять ДО написания текста |
 | `copywriting` | [coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills) | Конверсионные тексты: слоганы, полные описания — специфичность, выгоды вместо фич, CTA-формулы |
 | `product-description-generator` | [nexscope-ai/ecommerce-skills](https://github.com/nexscope-ai/ecommerce-skills) | Раскладывает готовый месседж по полям листинга: тайтл, буллеты, полное описание, ключевые слова |
+| `product-marketing` | [coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills) | Создаёт `.agents/product-marketing.md` — базовый документ с позиционированием, миссией, ICP и аудиторией продукта, на который опираются остальные маркетинговые скиллы. Использовать в начале любого нового проекта |
+| `customer-research` | coreyhaines31/marketingskills | Сбор и синтез исследования клиентов: интервью, отзывы, JTBD, тикеты поддержки, Reddit/G2-майнинг → инсайты и персоны для позиционирования |
+| `competitor-profiling` | coreyhaines31/marketingskills | Профилирование конкурентов по списку URL: структурированные досье для конкурентного анализа и отстройки |
 
 Для формы «описание приложения в маркетплейсе» (название/слоган/полное описание/ключевые слова) — использовать все три по порядку: сначала `positioning-messaging` (в чём суть и отличие), потом `copywriting` (сильный текст), потом `product-description-generator` (разложить по конкретным полям).
+
+Для полноценного позиционирования продукта (миссия, ICP, отстройка от конкурентов) — сначала `customer-research` и `competitor-profiling` (собрать фактуру), потом `product-marketing` (свести в единый документ позиционирования/миссии) или `positioning-messaging` (фреймворк аудитория → отличие → сообщение), затем уже `copywriting`.
 
 ## Установка
 
