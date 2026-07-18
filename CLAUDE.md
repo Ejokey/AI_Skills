@@ -24,7 +24,8 @@ Claude Code is the engine, skills are the specialists, `projects/` holds the wor
 │   ├── marketing/
 │   ├── design/
 │   ├── business-analysis/
-│   └── tenders/
+│   ├── tenders/
+│   └── shared/              cross-role utilities (research, skill discovery, browser automation)
 ├── scripts/
 │   └── install-skills.sh   syncs skills/<role>/<name> → ~/.claude/skills (runtime)
 ├── projects/                one folder per project/initiative: context, docs, outputs
