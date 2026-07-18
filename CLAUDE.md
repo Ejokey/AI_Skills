@@ -35,11 +35,11 @@ Claude Code is the engine, skills are the specialists, `projects/` holds the wor
 ## How skills get here
 
 Skills are sourced from existing public repos (not written from scratch). The
-`find-skills` skill (installed globally, sourced from AI_Skills) is the tool for
-finding and installing candidates. Once a skill proves useful, drop its folder into
-the matching `skills/<role>/` directory here so it's versioned and backed up, then
-run `scripts/install-skills.sh` to sync it into the live `~/.claude/skills/` runtime
-folder Claude Code actually reads from.
+`find-skills` skill (in `skills/shared/`) searches the open agent-skills ecosystem
+(skills.sh / `npx skills`) for candidates. Once a skill proves useful, drop its
+folder into the matching `skills/<role>/` directory here so it's versioned and
+backed up, then run `scripts/install-skills.sh` to sync it into the live
+`~/.claude/skills/` runtime folder Claude Code actually reads from.
 
 ## Conventions
 
