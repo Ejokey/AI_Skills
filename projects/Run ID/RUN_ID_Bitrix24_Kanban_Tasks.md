@@ -25,6 +25,12 @@
 
 **Состояния:** пустая форма, ошибка формата, email уже используется.
 
+**Правило:** email/телефон уникальны в системе; пароль — минимальная длина и сложность.
+
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
+
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
 **Приоритет:** P0
@@ -46,6 +52,10 @@
 
 **Состояния:** новый пользователь без тренировок → нули, не заглушка.
 
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
+
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
 **Приоритет:** P0
@@ -61,6 +71,12 @@
 - Неблокирующий статус «в обработке»
 
 **Состояния:** processing → processed, failed (нет GPS), duplicate, неподдерживаемый формат.
+
+**Правило:** единственный способ получить тренировку в MVP — загрузка файла; дедупликация по времени, дистанции и хэшу файла.
+
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
 
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
@@ -82,6 +98,10 @@
 
 **Состояния:** нет данных пульса → график скрыт; приватная зона обрезает маршрут для чужих зрителей.
 
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
+
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
 **Приоритет:** P0
@@ -97,6 +117,12 @@
 - Поле «название сегмента»
 
 **Состояния:** участок короче ~500 м → предупреждение; сегмент с такой же геометрией уже есть → предложить существующий.
+
+**Правило:** сопоставление тренировок с сегментами — упрощённый алгоритм (bounding box + пересечение линий).
+
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
 
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
@@ -115,6 +141,10 @@
 
 **Состояния:** не проходил сегмент → лидерборд без выделения + CTA попробовать.
 
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
+
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
 **Приоритет:** P0
@@ -132,6 +162,10 @@
 
 **Состояния:** пустая лента (нет подписок) → призыв найти и подписаться.
 
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
+
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
 **Приоритет:** P0
@@ -148,6 +182,12 @@
 - Кнопка «Подписаться» / «Отписаться»
 
 **Состояния:** пустой результат поиска — не ошибка.
+
+**Правило:** подписка асимметрична, не требует подтверждения второй стороной.
+
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
 
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
@@ -168,6 +208,12 @@
 
 **Открытый вопрос → «Требует обсуждения»:** ЮKassa или Robokassa; устраивает ли разовый платёж без тарифа.
 
+**Правило:** в MVP только разовый платёж, без рекуррентных списаний.
+
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
+
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
 **Приоритет:** P0
@@ -186,6 +232,10 @@
 
 **Открытый вопрос → «Требует обсуждения»:** какие 2–3 партнёра на старте — нужны лого/бренд-гайды.
 
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
+
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
 **Приоритет:** P0
@@ -201,6 +251,10 @@
 **Элементы экрана**
 - Карта/список точек: название, координаты, описание
 
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
+
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
 **Приоритет:** P1
@@ -214,6 +268,10 @@
 **Элементы экрана**
 - Список событий: название, дата, организатор
 - Сортировка по дате, прошедшие не показываются
+
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
 
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
@@ -231,6 +289,12 @@
 
 **Состояния:** слишком большой радиус → предупреждение.
 
+**Правило:** обрезка — только для публичного показа; сам пользователь видит полный трек.
+
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
+
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
 **Приоритет:** P1
@@ -244,6 +308,10 @@
 **Элементы экрана**
 - Диалог подтверждения (повторный пароль/email)
 - Предупреждение о необратимости
+
+**Полезные ссылки**
+- Вайрфреймы (Miro): https://miro.com/welcomeonboard/TGxlY3ZKK2RtWmNtS3QzZXVEOEhPWFNJdStqQ0tZMUxzUG1mQzNaOHpXOXNKVFgxUTlrQ002bXhTbTVoZ2lSWnp0QVhSN2treDAxSFZmUTIxSmxtRjFsU3oxYTdrOFAxQjRQTlQyVzZ0WDRZc2RIaGUzYTNOQ0JTbHNPcVdrZ2ZBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=606033559503
+- Общий док по экранам: https://docs.google.com/document/d/1Otc6q2-2nDPB3iMcDPwwZ-D4APch0goZ/edit?usp=sharing&ouid=111463861333690498961&rtpof=true&sd=true
 
 **DoD:** [ ] UI/UX [ ] Frontend [ ] Backend
 
