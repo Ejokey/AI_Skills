@@ -11,6 +11,7 @@ Claude Code is the engine, skills are the specialists, `projects/` holds the wor
 - **Web Designer / Frontend Dev** — landing pages, UI work
 - **Business Analyst** — BA docs, use-case schemas, user stories — feeds UI/UX design
 - **Tender/Proposal** — reads tender descriptions, figures out which docs are actually needed, gathers them from colleagues, assembles the application
+- **Presale / Sales Manager** — client messaging, needs discovery, matching product vs custom dev, objection handling
 - **Presentations** — step-by-step deck building (cross-role, used by most of the above)
 
 ## Folder structure
@@ -24,6 +25,7 @@ Claude Code is the engine, skills are the specialists, `projects/` holds the wor
 │   ├── marketing/
 │   ├── design/
 │   ├── business-analysis/
+│   ├── sales/
 │   ├── tenders/
 │   └── shared/              cross-role utilities (research, skill discovery, browser automation)
 ├── scripts/
