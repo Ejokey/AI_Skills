@@ -1,0 +1,5 @@
+node_modules/
+.freebuff/
+
+# Exceeds GitHub's 100MB file size limit — kept locally only
+"projects/АО Медицина 2/АО МЕДИЦИНА.zip"
