@@ -1,52 +1,22 @@
 # Personal Ops — AI Agent System
 
-This folder is the operating base for a one-person set of role-based AI workflows.
-Claude Code is the engine, skills are the specialists, `projects/` holds the work.
+@AGENTS.md
 
-## Roles and their core tasks
+Операционная инструкция агентной системы — в `AGENTS.md` выше (импортируется автоматически).
+Этот файл содержит только то, что специфично для Claude Code.
 
-- **Project Manager** — task/deadline tracking, status reporting, not missing anything
-- **Product Manager** — comprehensive product docs, deep understanding of project ideas, works with dev team
-- **CMO / Marketing** — market analysis, competitor analysis
-- **Web Designer / Frontend Dev** — landing pages, UI work
-- **Business Analyst** — BA docs, use-case schemas, user stories — feeds UI/UX design
-- **Tender/Proposal** — reads tender descriptions, figures out which docs are actually needed, gathers them from colleagues, assembles the application
-- **Presale / Sales Manager** — client messaging, needs discovery, matching product vs custom dev, objection handling
-- **Presentations** — step-by-step deck building (cross-role, used by most of the above)
+## Специфика Claude Code
 
-## Folder structure
+- **Агенты** — `.claude/agents/*.md`. Оркестратор вызывает их по полю `description`.
+  Агент стартует без контекста разговора: передавай ему пути и задачу явно.
+- **Скиллы** — живая копия в `~/.claude/skills/` (плоская). Источник правды — `skills/`
+  в этом репозитории. После правки скилла: `bash scripts/install-skills.sh` + рестарт сессии.
+- **Имя скилла** должно быть уникально по всему дереву `skills/` — установщик кладёт всё
+  в одну плоскую папку.
 
-```
-/
-├── CLAUDE.md              this file
-├── skills/                 versioned source of truth for skills, organized by role
-│   ├── project-management/
-│   ├── product-management/
-│   ├── marketing/
-│   ├── design/
-│   ├── business-analysis/
-│   ├── sales/
-│   ├── tenders/
-│   └── shared/              cross-role utilities (research, skill discovery, browser automation)
-├── scripts/
-│   └── install-skills.sh   syncs skills/<role>/<name> → ~/.claude/skills (runtime)
-├── projects/                one folder per project/initiative: context, docs, outputs
-└── templates/               reusable doc templates (PRD, BA doc, tender checklist, etc.)
-```
+## Конвенции
 
-## How skills get here
-
-Skills are sourced from existing public repos (not written from scratch). The
-`find-skills` skill (in `skills/shared/`) searches the open agent-skills ecosystem
-(skills.sh / `npx skills`) for candidates. Once a skill proves useful, drop its
-folder into the matching `skills/<role>/` directory here so it's versioned and
-backed up, then run `scripts/install-skills.sh` to sync it into the live
-`~/.claude/skills/` runtime folder Claude Code actually reads from.
-
-## Conventions
-
-- One folder = one skill, must have `SKILL.md` with `name` + `description` frontmatter.
-- Skill `name` must be unique across the whole `skills/` tree (global installer is flat).
-- Every project lives in its own folder under `projects/`, named after the project/client.
-- Prefer plan-first prompting on any nontrivial build: state the outcome, which skills
-  to use, and constraints, then ask Claude to clarify before producing output.
+- Одна папка = один скилл, обязателен `SKILL.md` с `name` + `description` во frontmatter.
+- Один клиент = одна папка в `projects/`, названная по клиенту.
+- На нетривиальной задаче — сначала план: результат, какие скиллы, ограничения;
+  уточнить неясное до того, как производить артефакт.
