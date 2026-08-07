@@ -1,0 +1,114 @@
+[
+  {
+    "index": 1,
+    "footerTop": 623,
+    "maxBottom": 360,
+    "overflow": false,
+    "offender": "subtitle subtitle-dark"
+  },
+  {
+    "index": 2,
+    "footerTop": 673,
+    "maxBottom": 509,
+    "overflow": false,
+    "offender": "toc-grid"
+  },
+  {
+    "index": 3,
+    "footerTop": 673,
+    "maxBottom": 528,
+    "overflow": false,
+    "offender": "cards cards-3"
+  },
+  {
+    "index": 4,
+    "footerTop": 673,
+    "maxBottom": 452,
+    "overflow": false,
+    "offender": "callout callout-strong"
+  },
+  {
+    "index": 5,
+    "footerTop": 673,
+    "maxBottom": 484,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 6,
+    "footerTop": 673,
+    "maxBottom": 406,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 7,
+    "footerTop": 673,
+    "maxBottom": 409,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 8,
+    "footerTop": 673,
+    "maxBottom": 530,
+    "overflow": false,
+    "offender": "cards cards-3"
+  },
+  {
+    "index": 9,
+    "footerTop": 673,
+    "maxBottom": 323,
+    "overflow": false,
+    "offender": "callout callout-strong"
+  },
+  {
+    "index": 10,
+    "footerTop": 673,
+    "maxBottom": 477,
+    "overflow": false,
+    "offender": "cards cards-3"
+  },
+  {
+    "index": 11,
+    "footerTop": 673,
+    "maxBottom": 328,
+    "overflow": false,
+    "offender": "cards cards-4"
+  },
+  {
+    "index": 12,
+    "footerTop": 673,
+    "maxBottom": 425,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 13,
+    "footerTop": 673,
+    "maxBottom": 649,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 14,
+    "footerTop": 673,
+    "maxBottom": 459,
+    "overflow": false,
+    "offender": "cards cards-2"
+  },
+  {
+    "index": 15,
+    "footerTop": 673,
+    "maxBottom": 348,
+    "overflow": false,
+    "offender": "callout callout-strong"
+  },
+  {
+    "index": 16,
+    "footerTop": 640,
+    "maxBottom": 403,
+    "overflow": false,
+    "offender": "subtitle subtitle-dark"
+  }
+]
