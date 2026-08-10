@@ -1,0 +1,170 @@
+[
+  {
+    "index": 1,
+    "footerTop": 616,
+    "maxBottom": 375,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "subtitle subtitle-dark"
+  },
+  {
+    "index": 2,
+    "footerTop": 673,
+    "maxBottom": 646,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "toc-grid"
+  },
+  {
+    "index": 3,
+    "footerTop": 673,
+    "maxBottom": 401,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "cards cards-3 cards-compact"
+  },
+  {
+    "index": 4,
+    "footerTop": 673,
+    "maxBottom": 453,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "callout callout-strong"
+  },
+  {
+    "index": 5,
+    "footerTop": 673,
+    "maxBottom": 646,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "cards cards-3"
+  },
+  {
+    "index": 6,
+    "footerTop": 673,
+    "maxBottom": 413,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 7,
+    "footerTop": 673,
+    "maxBottom": 372,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 8,
+    "footerTop": 673,
+    "maxBottom": 380,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 9,
+    "footerTop": 673,
+    "maxBottom": 646,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "cards cards-3 cards-compact"
+  },
+  {
+    "index": 10,
+    "footerTop": 673,
+    "maxBottom": 646,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 11,
+    "footerTop": 673,
+    "maxBottom": 440,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 12,
+    "footerTop": 673,
+    "maxBottom": 646,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "price-strip"
+  },
+  {
+    "index": 13,
+    "footerTop": 673,
+    "maxBottom": 646,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "pf-foot"
+  },
+  {
+    "index": 14,
+    "footerTop": 673,
+    "maxBottom": 646,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 15,
+    "footerTop": 673,
+    "maxBottom": 646,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "pf-grid pf-grid-6"
+  },
+  {
+    "index": 16,
+    "footerTop": 673,
+    "maxBottom": 593,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "metrics m3"
+  },
+  {
+    "index": 17,
+    "footerTop": 673,
+    "maxBottom": 593,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "metrics m3"
+  },
+  {
+    "index": 18,
+    "footerTop": 673,
+    "maxBottom": 609,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "metrics m3"
+  },
+  {
+    "index": 19,
+    "footerTop": 673,
+    "maxBottom": 593,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "metrics m3"
+  },
+  {
+    "index": 20,
+    "footerTop": 673,
+    "maxBottom": 646,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "callout"
+  },
+  {
+    "index": 21,
+    "footerTop": 673,
+    "maxBottom": 447,
+    "bodyClipped": false,
+    "overflow": false,
+    "offender": "contact-strip"
+  }
+]
