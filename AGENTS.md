@@ -125,6 +125,7 @@ tenders/<Тендер>/
 | Задача | Скилл |
 |---|---|
 | КП, тендерная презентация, слайды | `skills/tenders/tender-kp-builder/` |
+| **Короткое КП на ИИ-продукт вне тендера** (AIR/КСИИ: SHADO, RAG, AgenticOS) | `skills/sales/ai-product-kp/` |
 | Смета, НМЦ, обоснование цены | `skills/tenders/tender-estimate-builder/` |
 | Разбор RFP/тендерной документации | `skills/tenders/rfp-responder/` |
 | Коммерческое предложение текстом | `skills/tenders/proposal-writer/` |
@@ -136,6 +137,7 @@ tenders/<Тендер>/
 | Исследование аудитории | `skills/marketing/customer-research/` |
 | Позиционирование, тексты | `skills/marketing/positioning-messaging/`, `copywriting/` |
 | Discovery-звонок, работа с возражениями | `skills/sales/` |
+| Лендинг, посадочная страница, прототипы и макеты сайта | `skills/design/landing-prototype-pipeline/` |
 | Презентация в PPTX | `skills/design/pptx/` |
 | Глубокое исследование с источниками | `skills/shared/deep-research/` |
 | Разбор и раскладка файлов | `skills/shared/file-organizer/` |
