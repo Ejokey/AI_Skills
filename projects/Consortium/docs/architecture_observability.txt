@@ -1,0 +1,463 @@
+Observability & Replay
+¶
+OpenTelemetry и OpenInference инструментация. Langfuse self-hosted backend. Метод
+replay_session
+с model swap. CostGuard per-session и cumulative.
+Tracing setup
+¶
+from
+agenticos
+import
+setup_tracer
+,
+setup_langfuse_tracer
+,
+get_tracer
+# Variant 1: generic OTel — exporters: console / OTLP / memory / none
+provider
+=
+setup_tracer
+(
+service_name
+=
+"agenticos"
+,
+exporter
+=
+"otlp"
+,
+otlp_endpoint
+=
+"http://localhost:4318"
+,
+)
+# Variant 2: Langfuse (ADR-0017)
+provider
+=
+setup_langfuse_tracer
+(
+public_key
+=
+settings
+.
+langfuse_public_key
+,
+secret_key
+=
+settings
+.
+langfuse_secret_key
+,
+host
+=
+settings
+.
+langfuse_host
+,
+)
+# Использование
+tracer
+=
+get_tracer
+(
+__name__
+)
+with
+tracer
+.
+start_as_current_span
+(
+"custom-operation"
+)
+as
+span
+:
+span
+.
+set_attribute
+(
+"custom.attr"
+,
+"value"
+)
+...
+TracerProvider
+идемпотентен — повторный
+setup_tracer
+заменяет provider.
+Spans, эмитируемые Harness
+¶
+Span
+Когда эмитится
+Атрибуты
+agenticos.handle_user_message
+Root span per turn
+agenticos.session.id
+,
+agenticos.agent.id
+,
+agenticos.principal.subject
+,
+agenticos.plan_only
+agenticos.llm.call
+Каждый model call
+gen_ai.request.model
+,
+gen_ai.request.id
+,
+gen_ai.response.finish_reason
+,
+gen_ai.usage.input_tokens
+,
+gen_ai.usage.output_tokens
+,
+gen_ai.system
+agenticos.tool.dispatch
+Каждый tool call
+agenticos.tool.name
+,
+agenticos.tool.call_id
+,
+agenticos.tool.destructive
+OpenInference attribute set (константы в
+agenticos.observability.attributes
+):
+AGENTICOS_AGENT_ID
+=
+"agenticos.agent.id"
+AGENTICOS_SESSION_ID
+=
+"agenticos.session.id"
+AGENTICOS_PRINCIPAL_SUBJECT
+=
+"agenticos.principal.subject"
+AGENTICOS_PLAN_ONLY
+=
+"agenticos.plan_only"
+AGENTICOS_TOOL_NAME
+=
+"agenticos.tool.name"
+AGENTICOS_TOOL_CALL_ID
+=
+"agenticos.tool.call_id"
+AGENTICOS_TOOL_DESTRUCTIVE
+=
+"agenticos.tool.destructive"
+GEN_AI_SYSTEM
+=
+"gen_ai.system"
+GEN_AI_REQUEST_MODEL
+=
+"gen_ai.request.model"
+GEN_AI_REQUEST_ID
+=
+"gen_ai.request.id"
+GEN_AI_RESPONSE_FINISH_REASON
+=
+"gen_ai.response.finish_reason"
+GEN_AI_USAGE_INPUT_TOKENS
+=
+"gen_ai.usage.input_tokens"
+GEN_AI_USAGE_OUTPUT_TOKENS
+=
+"gen_ai.usage.output_tokens"
+Critical invariants
+¶
+Spans содержат только metadata; content, credentials и secrets не помещаются в атрибуты. Проверяется контракт-тестом.
+TracerProvider
+setup идемпотентен — повторный вызов не создаёт дубликат.
+Memory exporter для tests:
+get_memory_exporter()
+возвращает in-process collector,
+setup_tracer(exporter="memory")
+.
+CostGuard
+¶
+Per-session (ADR-0015 + 0022)
+¶
+from
+agenticos
+import
+TokenBudget
+,
+CostGuard
+from
+agenticos.contracts.pricing
+import
+DEFAULT_PRICING_TABLE
+budget
+=
+TokenBudget
+(
+max_input_tokens
+=
+100_000
+,
+max_output_tokens
+=
+20_000
+,
+max_total_tokens
+=
+120_000
+,
+max_usd
+=
+Decimal
+(
+"1.00"
+),
+)
+guard
+=
+CostGuard
+(
+budget
+=
+budget
+,
+pricing_table
+=
+DEFAULT_PRICING_TABLE
+)
+# Используется внутри Harness после model.responded
+guard
+.
+record
+(
+model_id
+,
+response
+.
+usage
+)
+guard
+.
+check
+()
+# поднимает BudgetExceededError(kind="input" | "output" | "total" | "usd")
+Harness при превышении эмитит
+budget.exceeded
+и переводит сессию в
+errored
+.
+Cumulative (ADR-0090 Phase B)
+¶
+from
+agenticos
+import
+CumulativeCostGuard
+,
+SQLiteCumulativeBudgetStore
+,
+CumulativeBudgetLimits
+store
+=
+SQLiteCumulativeBudgetStore
+(
+db_path
+=
+"budgets.db"
+)
+await
+store
+.
+init_schema
+()
+cumulative_guard
+=
+CumulativeCostGuard
+(
+store
+=
+store
+,
+limits
+=
+CumulativeBudgetLimits
+(
+per_agent_per_day_usd
+=
+Decimal
+(
+"5.00"
+),
+per_enduser_per_day_usd
+=
+Decimal
+(
+"10.00"
+),
+),
+pricing_table
+=
+DEFAULT_PRICING_TABLE
+,
+)
+harness
+=
+Harness
+(
+store
+=
+session_store
+,
+llm
+=
+llm
+,
+cumulative_guard
+=
+cumulative_guard
+,
+enduser_id
+=
+"user-42"
+,
+)
+Cumulative aggregation выполняется после per-session check в том же
+_one_turn
+. При превышении эмитится
+budget.cumulative_exceeded
+, сессия переходит в
+errored
+. Реализует denial-of-wallet protection (TD-003).
+Aux USD из voice_synthesize и web_search (TD-022 + 023)
+¶
+Voice synthesis и web search имеют per-call USD, зависящий от vendor. Регистрируются через
+CostGuard.record_aux_usd(amount, source="voice" | "web_search")
+и аккумулируются в общий
+max_usd
+budget.
+Replay (ADR-0016)
+¶
+from
+agenticos
+import
+replay_session
+new_session_id
+=
+await
+replay_session
+(
+source_session_id
+=
+original_session
+.
+session_id
+,
+store
+=
+session_store
+,
+llm
+=
+new_llm_provider
+,
+new_model_id
+=
+"anthropic/claude-sonnet-4.5"
+,
+)
+# Original event log не модифицируется (wake-семантика).
+# Replay создаёт новые agent_id и session_id.
+# Эмиттит replay.started / replay.completed в новой сессии (включая случай ошибки).
+Critical invariants:
+Replay отклоняется на active source (
+SessionNotReplayableError
+).
+Replay создаёт новый
+agent_id
+, оригинал не модифицируется.
+replay.started
+и
+replay.completed
+эмитятся в новой сессии в том числе при ошибке (через
+finally
+).
+Use cases.
+Regression testing — прогон production trace через новую model version. Debugging — воспроизведение incident в isolated environment. A/B testing — сравнение моделей на идентичных turn'ах.
+Pass^k methodology (ADR-0092)
+¶
+Для evals — multi-seed runner с variance reporting:
+from
+agenticos
+import
+MultiSeedEvalRunner
+,
+aggregate_trials
+,
+summarize_multi_seed
+runner
+=
+MultiSeedEvalRunner
+(
+base_runner
+=
+eval_runner
+,
+seeds
+=
+[
+1
+,
+2
+,
+3
+,
+4
+],
+judge
+=
+llm_judge
+,
+)
+result
+=
+await
+runner
+.
+run
+(
+tasks
+)
+summary
+=
+summarize_multi_seed
+(
+result
+)
+# {
+#   'pass_at_1': 0.85,  # хотя бы один seed успешен
+#   'pass_at_k': 0.62,  # все k seeds успешны
+#   'stddev': 0.04,
+# }
+Pass@k (best of k) и Pass^k (all k succeed) разделяют capability модели и variance harness'а.
+ADR map
+¶
+ADR
+Что фиксирует
+ADR-0014
+OTel + OpenInference
+ADR-0015
+Per-session CostGuard
+ADR-0016
+replay_session
+ADR-0017
+Langfuse backend
+ADR-0022
+USD budget
+ADR-0090
+Cumulative budget, denial-of-wallet protection
+ADR-0092
+Pass^k methodology
+Дальше
+¶
+Production → Langfuse
+.
+Production → CostGuard
+.
+Integrations → Eval pipeline
+.
+Учебник → 06 · Replay сессии
+.

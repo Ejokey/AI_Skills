@@ -1,0 +1,37 @@
+Философия
+¶
+AgenticOS — операционная среда для AI-агентов, построенная по тем же принципам, что классические операционные системы. Этот раздел документирует архитектурные аксиомы, на которых стоит остальной cookbook.
+Пять опор философии
+¶
+1. Зачем agenticOS
+Различие function calling / AI-агента / agentic OS. Семь AIOS-модулей (Mei et al., COLM 2025). Anthropic Managed Agents brain/hands/session split. Lethal trifecta (Willison) и реальные инциденты. Изоляционные tier'ы: gVisor, Firecracker, V8 isolate. Production-grade критерии.
+Около 20 минут чтения
+2. Brain / Hands / Session
+Главная архитектурная аксиома. Anthropic в апреле 2026 опубликовал паттерн «decoupling the brain from the hands» — AgenticOS следует ему. Brain не имеет доступа к credentials. Session переживает сбой Brain. Hands изолированы.
+ADR-0004, ADR-0033, ADR-0040
+3. Labeled untrusted (ADR-0076)
+Канонический ответ на prompt injection. Tool output с trust_level untrusted доставляется P-LLM с явной разметкой
+<untrusted_data>
+, а не auto-redact'ом. Соответствует production-практике Anthropic, OpenAI, Google 2026.
+ADR-0076 supersedes ADR-0021
+4. Thin harness (ADR-0083)
+Explicit planning DAG не строится поверх reasoning-моделей. Используются
+reasoning_effort
+, prompt caching и principle-based prompts. Эмпирическая валидация: 85.7% Pass¹ на τ²-retail с Gemini 3.5 Flash — паритет с Sonnet 4.5 reference.
+ADR-0083, ADR-0080..0082
+5. ADR-first дисциплина
+Каждое архитектурное решение фиксируется как Architecture Decision Record до кода. 101 ADR за полгода. Принятый ADR иммутабелен — новые решения супер-сидят старые. Tech-debt централизован в реестре с P0/P1/P2 (ADR-0086).
+ADR-0001, ADR-0086
+Порядок чтения
+¶
+Минимальный путь (около 45 минут):
+Зачем agenticOS
+→
+Brain / Hands / Session
+→
+Labeled untrusted
+.
+Полный путь (около 90 минут) — все пять страниц последовательно. Это материал, который читается новым разработчиком в первую сессию проекта для синхронизации с архитектурными аксиомами.
+Игнорирование философского раздела приводит к одной из двух типичных проблем: переоткрытию решений, уже зафиксированных ADR, или прямому нарушению инвариантов на уровне кода с последующим выявлением через import-linter или контракт-тесты. Дисциплина ADR-first описана в
+ADR-first
+.

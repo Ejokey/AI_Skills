@@ -1,0 +1,150 @@
+Langfuse observability
+¶
+Self-hosted Langfuse через
+setup_langfuse_tracer
+. OpenInference + OpenTelemetry spans. ADR-0014 + 0017.
+Self-host Langfuse
+¶
+docker
+compose
+-f
+docker/langfuse/docker-compose.yml
+up
+-d
+# Web UI: http://localhost:3000
+LANGFUSE_PUBLIC_KEY
+и
+LANGFUSE_SECRET_KEY
+извлекаются в UI: Settings → API Keys.
+Setup
+¶
+from
+agenticos
+import
+setup_langfuse_tracer
+provider
+=
+setup_langfuse_tracer
+(
+public_key
+=
+settings
+.
+langfuse_public_key
+,
+secret_key
+=
+settings
+.
+langfuse_secret_key
+,
+host
+=
+settings
+.
+langfuse_host
+,
+# https://your-langfuse.example.com
+)
+# После этого все spans Harness'а отправляются в Langfuse автоматически.
+Структура trace
+¶
+Каждая сессия отображается как trace с иерархией spans:
+agenticos.handle_user_message
+(root) — per turn
+agenticos.llm.call
+— model call с
+gen_ai.*
+атрибутами
+agenticos.tool.dispatch
+— каждый tool call с
+tool.*
+атрибутами
+Атрибуты:
+agenticos.session.id
+,
+agenticos.agent.id
+,
+agenticos.principal.subject
+,
+agenticos.plan_only
+.
+gen_ai.request.model
+,
+gen_ai.request.id
+,
+gen_ai.response.finish_reason
+.
+gen_ai.usage.input_tokens
+,
+gen_ai.usage.output_tokens
+.
+agenticos.tool.name
+,
+agenticos.tool.call_id
+,
+agenticos.tool.destructive
+.
+Critical invariant: spans не содержат credentials, secrets, raw content — только metadata. Проверяется контракт-тестом.
+Pricing sync (ADR-0060)
+¶
+Для корректного отображения USD per trace Langfuse требует pricing models. Sync 353 моделей OpenRouter:
+python
+scripts/sync_openrouter_pricing.py
+--langfuse
+# 353/353 entries pushed в self-hosted Langfuse
+# Total моделей в Langfuse: 161 → 514
+После sync Langfuse UI показывает корректный USD per trace на основе pricing tables.
+Альтернативные экспортёры
+¶
+from
+agenticos
+import
+setup_tracer
+# OTLP endpoint (Datadog / Grafana / Honeycomb)
+setup_tracer
+(
+service_name
+=
+"agenticos"
+,
+exporter
+=
+"otlp"
+,
+otlp_endpoint
+=
+"http://otel-collector:4318"
+,
+)
+# Console (для dev — печать spans в stdout)
+setup_tracer
+(
+exporter
+=
+"console"
+)
+# In-memory (для tests — get_memory_exporter() возвращает collector)
+setup_tracer
+(
+exporter
+=
+"memory"
+)
+Replay-готовность
+¶
+Replay (
+replay_session
+) создаёт отдельные traces в Langfuse. Tags устанавливаются через
+tags=["replay", "regression-test"]
+в trace metadata.
+Дальше
+¶
+Архитектура → Observability
+.
+ADR-0014
+.
+ADR-0017
+.
+ADR-0060
+.

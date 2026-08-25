@@ -1,0 +1,257 @@
+Vault backends
+¶
+Все vault'ы реализуют
+SecretsVault
+Protocol. Wiring через
+EgressProxy.inject_credentials(host, headers)
+. ADR-0026 + 0027 + 0030 + 0041 + 0091.
+SecretsVault Protocol
+¶
+class
+SecretsVault
+(
+Protocol
+):
+async
+def
+get_credential
+(
+self
+,
+host
+:
+str
+,
+*
+,
+principal
+:
+Principal
+)
+->
+Credential
+|
+None
+:
+...
+async
+def
+list_hosts
+(
+self
+,
+*
+,
+principal
+:
+Principal
+|
+None
+=
+None
+)
+->
+list
+[
+str
+]:
+...
+def
+invalidate_cache
+(
+self
+)
+->
+None
+:
+...
+# ADR-0091 active rotation push
+Vault возвращает
+Credential
+— pre-validated headers для injection в HTTP request. Raw token из vault не извлекается на уровне application code.
+Backends
+¶
+InMemoryVault (dev, tests, agenticos.testing)
+¶
+from
+agenticos.testing
+import
+InMemoryVault
+vault
+=
+InMemoryVault
+(
+credentials
+=
+{
+"api.example.com"
+:
+[{
+"header"
+:
+"Authorization"
+,
+"value"
+:
+"Bearer test-token"
+}],
+},
+)
+KeyringVault (single-host production, ADR-0027)
+¶
+OS-level credential store: Windows Credential Manager, macOS Keychain, Linux SecretService.
+pip
+install
+-e
+".[vault]"
+from
+agenticos
+import
+KeyringVault
+vault
+=
+KeyringVault
+(
+service_prefix
+=
+"agenticos:"
+)
+# Credentials под ключом "agenticos:credentials:api.example.com"
+# Запись: keyring.set_password("agenticos:credentials:api.example.com", "Authorization", "Bearer ...")
+EnvVault (CI, Docker, ADR-0030)
+¶
+from
+agenticos
+import
+EnvVault
+vault
+=
+EnvVault
+(
+prefix
+=
+"AGENTICOS_CRED_"
+)
+# Credentials в env vars:
+# AGENTICOS_CRED_API_EXAMPLE_COM_AUTHORIZATION=Bearer ...
+Encrypted env vars через age / sops — operator wires externally (TD-033, accepted limitation).
+HashiCorpVault (multi-host production, ADR-0041)
+¶
+pip
+install
+-e
+".[vault-hashicorp]"
+# hvac
+from
+agenticos
+import
+HashiCorpVault
+vault
+=
+HashiCorpVault
+(
+url
+=
+"https://vault.example.com"
+,
+auth_method
+=
+"approle"
+,
+# или "kubernetes" / "token"
+role_id
+=
+"..."
+,
+secret_id
+=
+"..."
+,
+kv_mount
+=
+"secret"
+,
+kv_path_prefix
+=
+"agenticos/credentials/"
+,
+cache_ttl_seconds
+=
+300
+,
+)
+KV v2 storage. AppRole для server-to-server (production), Kubernetes Service Account для k8s, token для dev.
+OpenBao (Apache-2.0 fork)
+¶
+HashiCorpVault
+работает с OpenBao (drop-in replacement) при том же классе с указанием
+url=https://openbao.example.com
+.
+Active rotation push (ADR-0091)
+¶
+При rotation credentials на Vault сервере parent process должен явно вызвать
+vault.invalidate_cache()
+— следующее обращение mitmproxy sidecar перечитает credentials с сервера.
+# Operator triggers rotation, then signals AgenticOS:
+vault
+.
+invalidate_cache
+()
+# Следующая mitmproxy injection re-fetches from Vault
+Email account store
+¶
+Email SMTP/IMAP passwords хранятся отдельно в
+EmailAccountStore
+(Keyring или InMemory):
+from
+agenticos.identity
+import
+KeyringEmailAccountStore
+email_store
+=
+KeyringEmailAccountStore
+(
+config_path
+=
+"email-accounts.toml"
+)
+# Passwords в keyring под "agenticos:email_{account_id}_smtp" / "_imap"
+Это не SecretsVault: SMTP/IMAP используют protocol-level auth, не HTTP header injection.
+Credential metadata (audit)
+¶
+@dataclass
+(
+frozen
+=
+True
+)
+class
+CredentialMetadata
+:
+host
+:
+str
+scope
+:
+str
+# tool-specific scope
+backend
+:
+str
+# vault backend name
+fetched_at
+:
+datetime
+В событии
+egress.credentials_injected
+сохраняется metadata, но не token.
+Дальше
+¶
+mitmproxy egress sidecar
+— wiring vault в network boundary.
+ADR-0027
+.
+ADR-0041
+.
+ADR-0091
+.

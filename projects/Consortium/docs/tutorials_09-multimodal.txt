@@ -1,0 +1,162 @@
+09 · Multimodal — изображения, аудио, видео, PDF
+¶
+multimodal_read
+(ADR-0075, supersedes ADR-0071
+image_read
+) — unified понимание файла через Gemini multimodal API.
+Назначение
+¶
+Tool принимает путь к файлу в workspace и question, возвращает текстовое описание. Поддерживаемые форматы:
+Изображения:
+PNG, JPEG, WebP, HEIC, HEIF, AVIF (через
+vision
+extra — Pillow + pillow-heif + pillow-avif-plugin transcode).
+Аудио:
+WAV, MP3, AAC, FLAC, OGG, OPUS.
+Видео:
+MP4, MOV (с extract frames).
+PDF:
+текст, figures, structure.
+trust_level —
+untrusted
+. Output обрабатывается reduce-pass с обёрткой
+<untrusted_data>
+(ADR-0076).
+Wiring
+¶
+from
+agenticos.hands.tools
+import
+register_multimodal_read
+# multimodal_caller — обёртка над Gemini API.
+# В production driver есть готовый make_default_multimodal_caller.
+count
+=
+register_multimodal_read
+(
+tool_manager
+=
+tools
+,
+multimodal_caller
+=
+multimodal_caller
+,
+)
+# count = 1 при успешной регистрации
+Использование
+¶
+Через LLM:
+harness
+.
+handle_user_message
+(
+session_id
+,
+"Что изображено на attachments/photo.jpg?"
+)
+# Модель вызывает: multimodal_read(path="attachments/photo.jpg", question="Что изображено?")
+Прямой dispatch:
+result
+=
+await
+tools
+.
+dispatch
+(
+ToolCall
+(
+tool_call_id
+=
+"tc-1"
+,
+name
+=
+"multimodal_read"
+,
+arguments
+=
+{
+"path"
+:
+"attachments/photo.jpg"
+,
+"question"
+:
+"Опиши изображение. Какие объекты присутствуют?"
+,
+},
+))
+HEIC и AVIF support (TD-055)
+¶
+iPhone и Android по умолчанию используют HEIC / HEIF для фотографий. AVIF — современный browser format. Gemini API принимает JPEG, PNG, WebP — нативные форматы транскодируются через Pillow + plugins.
+pip
+install
+-e
+".[vision]"
+# Pillow + pillow-heif + pillow-avif-plugin
+Функция
+_transcode_to_png_if_needed
+выполняет конвертацию автоматически. Alpha-канал композится на белый фон для RGB output.
+Voice synthesis (output side)
+¶
+Аналог для аудио output —
+voice_synthesize
+:
+from
+agenticos.hands.tools
+import
+register_voice_synthesize
+register_voice_synthesize
+(
+tool_manager
+=
+tools
+,
+api_key
+=
+settings
+.
+elevenlabs_api_key
+,
+# ElevenLabs API
+cost_guard
+=
+cost_guard
+,
+# TTS USD регистрируется в budget через record_aux_usd (TD-022)
+)
+Tool помечен
+destructive=True
+(генерирует shareable artifact). Output —
+voice/output.ogg
+в workspace.
+Эмпирическое сравнение reduce-pass подходов
+¶
+ADR-0076 документирует production-инцидент. Пользователь Telegram-бота прислал фотографию коробки восковых мелков.
+multimodal_read
+корректно вернул:
+This is a box of wax crayons. The text identifies the brand as 'Kalyaka-Malyaka'.
+The box indicates 8 different colors, suitable for ages 3+.
+Pre-ADR-0076 (auto-redact): модель сгенерировала hallucination — «таблица с меню для детского учреждения».
+Post-ADR-0076 (labeled untrusted): модель отвечает корректно — «Это коробка восковых мелков 'Каляка-Маляка', 8 цветов, для детей от 3 лет».
+Trust level и labeling
+¶
+multimodal_read.output_trust_level = "untrusted"
+. В reduce.py содержимое оборачивается:
+<untrusted_data tool_call_id="tc-1">
+This is a box of wax crayons. Brand 'Kalyaka-Malyaka'. 8 colors, ages 3+.
+</untrusted_data>
+Модель видит контент и маркер; на уровне system prompt обучена quote и summarise, не treating instructions inside as commands. См.
+Философия → Labeled untrusted
+.
+Дальше
+¶
+Tool reference → Multimodal
+— детали multimodal_read и voice_synthesize.
+Философия → Labeled untrusted
+.
+ADR-0075
+.
+ADR-0077
+— voice OUT.

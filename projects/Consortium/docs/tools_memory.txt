@@ -1,0 +1,197 @@
+Memory tools
+¶
+Четыре tool'а, предоставляющих LLM прямой доступ к three-tier memory. Auto-registered через
+Harness(memory=MemoryManager, register_memory_tools=True)
+(default).
+memory_block
+¶
+CRUD над core memory blocks (≤8K char/block, ≤16K total per agent).
+Operations:
+write
+:
+{op: "write", name: "persona", content: "..."}
+(destructive)
+read
+:
+{op: "read", name: "persona"}
+→
+{"content": "..."}
+list
+:
+{op: "list"}
+→
+{"blocks": [...]}
+delete
+:
+{op: "delete", name: "persona"}
+(destructive)
+Имена блоков проходят snake_case валидацию (regex
+^[a-z][a-z0-9_]*$
+).
+Содержимое блоков инжектируется в system prompt каждого turn'а через
+reduce_events_to_messages(core_memory=...)
+. Назначение — long-lived state агента: persona, preferences, ongoing task state.
+memory_archive
+¶
+Append archival entry с категорией и importance.
+{
+"content"
+:
+"User prefers pineapple on pizza."
+,
+"category"
+:
+"preference"
+,
+"importance"
+:
+0.8
+,
+# 0.0..1.0
+"expires_at"
+:
+null
+,
+}
+Output:
+{"entry_id": "..."}
+. Эмитирует
+memory.archived
+event.
+memory_search
+¶
+BM25 + recency × √importance search над archival entries.
+{
+"query"
+:
+"pineapple"
+,
+"limit"
+:
+5
+,
+"category"
+:
+null
+,
+# опциональный фильтр
+}
+Output:
+{
+"hits"
+:
+[
+{
+"entry_id"
+:
+"..."
+,
+"content"
+:
+"..."
+,
+"category"
+:
+"preference"
+,
+"importance"
+:
+0.8
+,
+"bm25_score"
+:
+0.53
+,
+"final_score"
+:
+0.474
+}
+],
+"total_candidates"
+:
+1
+}
+final_score = bm25_score × recency_decay × √importance
+. Expired entries (по
+expires_at
+) фильтруются. Эмитирует
+memory.searched
+event.
+memory_recall (ADR-0093, Phase B)
+¶
+Cross-session message history search.
+{
+"query"
+:
+"API authentication"
+,
+"limit"
+:
+10
+,
+}
+Output:
+{
+"hits"
+:
+[
+{
+"session_id"
+:
+"..."
+,
+"message_role"
+:
+"user"
+|
+"assistant"
+,
+"content"
+:
+"..."
+,
+"created_at"
+:
+"2026-05-23T..."
+,
+"score"
+:
+0.62
+}
+]
+}
+Identity-bound: возвращает только сессии того же
+agent_id
+. FTS5 индекс на
+SQLiteRecallStore
+или Postgres equivalent.
+Требования:
+Harness(recall_store=...)
+Phase B Harness wedge — auto-indexer записывает каждое
+MessageUserEvent
+и non-terminal
+MessageAssistantEvent
+.
+Альтернатива: caller populate'ит store вручную через
+RecallStore.add(...)
+.
+Identity isolation
+¶
+Все memory tools используют
+context.agent_id
+(полученный через
+ToolManager.bind(agent_id=...)
+) для scoping. Agent A не видит memory agent B. Контракт-тест покрывает свойство.
+Sleep-time consolidation
+¶
+См.
+Integrations → Sleep-time consolidation
+. Batch-сервис, суммаризующий old archival entries в semantic clusters.
+Дальше
+¶
+Архитектура → Memory
+— полная спецификация three-tier.
+Учебник → 04 · Three-tier memory
+— прямое API MemoryManager.
+Production → Postgres + pgvector
+— multimodal embeddings.

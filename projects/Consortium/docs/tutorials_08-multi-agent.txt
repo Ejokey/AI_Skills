@@ -1,0 +1,445 @@
+08 · Multi-agent + delegate
+¶
+Supervisor pattern (ADR-0050–0053). Главный агент делегирует подзадачи sub-агентам через
+delegate
+tool. Sub-агент имеет собственный sub-session, собственный набор tools, собственную identity. Результат возвращается через
+submit_result
+.
+Концепция
+¶
+flowchart TB
+    User --> Orchestrator
+    Orchestrator -->|"delegate(spec='researcher', task='...')"| R[Researcher sub-Harness<br/>tools: web_search, multimodal_read]
+    Orchestrator -->|"delegate(spec='writer', task='...')"| W[Writer sub-Harness<br/>tools: file_editor, python_exec]
+    R -->|"submit_result(...)"| Orchestrator
+    W -->|"submit_result(...)"| Orchestrator
+    Orchestrator --> User
+Orchestrator не имеет direct access к tools sub-агентов; он только делегирует. Это обеспечивает:
+Scoped tools per sub-agent.
+Researcher не имеет
+file_editor
+; writer не имеет
+web_search
+.
+Isolated workspaces.
+Sub-агент работает в собственной subdirectory родительского workspace.
+Subtree cost aggregation
+(TD-044). Spend sub-агента записывается под orchestrator's
+agent_id
+.
+AgentSpec — описание sub-агента
+¶
+from
+agenticos.multiagent
+import
+AgentSpec
+,
+AgentSpecRegistry
+researcher_spec
+=
+AgentSpec
+(
+name
+=
+"researcher"
+,
+description
+=
+"Specialist по web research. Используется для fact-finding."
+,
+system_prompt
+=
+"Researcher. Использует web_search для поиска фактов. Возвращает concise findings."
+,
+model_id
+=
+"anthropic/claude-haiku-4.5"
+,
+allowed_tools
+=
+(
+"web_search"
+,
+"multimodal_read"
+,
+"think"
+),
+max_tool_iterations
+=
+15
+,
+max_attempts
+=
+3
+,
+# retry on LLMTransientError (TD-061)
+)
+writer_spec
+=
+AgentSpec
+(
+name
+=
+"writer"
+,
+description
+=
+"Markdown / PDF writer. Используется для генерации output documents."
+,
+system_prompt
+=
+"Technical writer. Форматирует input в clean markdown."
+,
+model_id
+=
+"anthropic/claude-haiku-4.5"
+,
+allowed_tools
+=
+(
+"file_editor"
+,
+"python_exec"
+,
+"think"
+),
+max_tool_iterations
+=
+10
+,
+)
+registry
+=
+AgentSpecRegistry
+(
+specs
+=
+[
+researcher_spec
+,
+writer_spec
+])
+Wiring orchestrator'а
+¶
+from
+agenticos
+import
+Harness
+,
+OpenRouterProvider
+,
+SQLiteSessionStore
+,
+ToolManager
+from
+agenticos.multiagent
+import
+DELEGATE_TOOL
+,
+make_delegate_executor
+# Стандартный wiring
+store
+=
+SQLiteSessionStore
+(
+db_path
+=
+"agenticos.db"
+)
+await
+store
+.
+init_schema
+()
+llm
+=
+OpenRouterProvider
+(
+api_key
+=
+settings
+.
+openrouter_api_key
+)
+tools
+=
+ToolManager
+(
+backend
+=
+SubprocessBackend
+(),
+workspace_root
+=
+workspace
+)
+# Регистрация delegate tool
+delegate_executor
+=
+make_delegate_executor
+(
+registry
+=
+registry
+,
+store
+=
+store
+,
+llm
+=
+llm
+,
+# один и тот же LLM provider для sub-агентов
+tools_factory
+=
+lambda
+:
+tools
+,
+# Опционально: per-spec policy, budget и др.
+)
+tools
+.
+register
+(
+DELEGATE_TOOL
+,
+delegate_executor
+)
+# Orchestrator agent
+from
+agenticos.multiagent
+import
+ORCHESTRATOR_PROMPT
+orchestrator
+=
+Agent
+(
+agent_id
+=
+uuid4
+(),
+created_at
+=
+datetime
+.
+now
+(
+UTC
+),
+system_prompt
+=
+ORCHESTRATOR_PROMPT
+,
+# содержит описание delegate и submit_result паттернов
+model_id
+=
+"anthropic/claude-haiku-4.5"
+,
+)
+await
+store
+.
+register_agent
+(
+orchestrator
+)
+session
+=
+await
+store
+.
+create_session
+(
+orchestrator
+.
+agent_id
+,
+created_by
+=
+"multi-agent-demo"
+)
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+tools
+=
+tools
+)
+response
+=
+await
+harness
+.
+handle_user_message
+(
+session
+.
+session_id
+,
+"Исследуй влияние CVE-2025-31133 и напиши summary на 200 слов."
+)
+Последовательность вызовов orchestrator'а:
+delegate(spec="researcher", task="Find facts about CVE-2025-31133")
+.
+Получение результата через
+tool.responded
+.
+delegate(spec="writer", task="Write 200-word summary from these facts: ...")
+.
+Получение результата writer'а.
+Финальный ответ пользователю.
+События в session log
+¶
+sequence  type
+1         session.created
+2         message.user
+3         model.called
+4         model.responded
+5         tool.called          name=delegate spec=researcher
+6         delegate.started     sub_session_id=...
+7         tool.responded
+8         model.called
+9         model.responded
+10        tool.called          name=delegate spec=writer
+11        delegate.started     sub_session_id=...
+12        tool.responded
+13        model.called
+14        model.responded
+15        message.assistant
+Sub-session events видны при подписке на
+BroadcastSessionStore
+с
+register_subtree(parent, child)
+— fan-out на parent observer'а (TD-043).
+Default specs
+¶
+Готовый набор researcher + writer:
+from
+agenticos.multiagent
+import
+build_default_research_writer_specs
+registry
+=
+AgentSpecRegistry
+(
+specs
+=
+build_default_research_writer_specs
+())
+# Researcher: web_search + multimodal_read + python_exec + think
+# Writer: file_editor + python_exec + think
+Submit result pattern
+¶
+Sub-агент завершает работу вызовом
+submit_result
+:
+from
+agenticos.multiagent
+import
+SUBMIT_RESULT_TOOL
+,
+submit_result_executor
+# В sub-Harness wiring (через make_delegate_executor — автоматически)
+sub_tools
+.
+register
+(
+SUBMIT_RESULT_TOOL
+,
+submit_result_executor
+)
+Вызов
+submit_result(outcome="success", payload={...})
+передаёт результат orchestrator'у. Без него —
+outcome="partial"
+(по причине max iterations или unexpected exit).
+Multi-hop delegation chain (ADR-0051)
+¶
+DelegationChain
+цепляет hop'ы:
+chain
+=
+DelegationChain
+(
+subject
+=
+"user-42"
+,
+act_on_behalf_of
+=
+(
+"orchestrator-7"
+,
+"researcher-3"
+),
+# 2-hop
+scopes
+=
+(
+"agent:run"
+,),
+purpose
+=
+"research-task"
+,
+...
+)
+Default
+delegation_max_depth=5
+в
+Settings
+.
+Subtree cost aggregation (TD-044)
+¶
+При spawn sub-Harness через
+make_delegate_executor
+:
+sub_harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+tools
+=
+sub_tools
+,
+subtree_root_agent_id
+=
+orchestrator
+.
+agent_id
+,
+# ledger пишется под orchestrator
+enduser_id
+=
+context
+.
+enduser_id
+,
+...
+)
+Cumulative budget видит spend subtree под orchestrator'ом, не фрагментирует per leaf.
+Дальше
+¶
+Архитектура → Identity & Policy
+— DelegationChain multi-hop.
+ADR-0050..0053
+— multi-agent suite.

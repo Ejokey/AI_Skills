@@ -1,0 +1,96 @@
+python_exec (ADR-0073)
+¶
+Sandboxed Python interpreter в subprocess'е. Trust level
+untrusted
+(stdout может содержать adversarial),
+destructive=True
+,
+requires_isolation=True
+.
+Регистрация
+¶
+from
+agenticos.hands.tools
+import
+register_python_exec
+count
+=
+register_python_exec
+(
+tools
+)
+Не работает на
+InProcessBackend
+без
+allow_unsafe_tools=True
+. Production-конфигурация —
+SubprocessBackend
+(Linux + Windows) или
+GVisorBackend
+(Linux / WSL2, kernel-level isolation).
+Input
+¶
+{
+"code"
+:
+"print(sum(range(100)))"
+,
+"timeout_seconds"
+:
+60
+,
+"stdin"
+:
+null
+}
+Output
+¶
+Trust level —
+untrusted
+:
+{
+"stdout"
+:
+"4950\n"
+,
+"stderr"
+:
+""
+,
+"exit_code"
+:
+0
+,
+"truncated"
+:
+false
+,
+"duration_ms"
+:
+142
+}
+Безопасность
+¶
+cwd locked на workspace.
+env scrub (аналогично
+bash
+).
+Network deny by default —
+GVisorBackend
+с
+--network=none
+.
+No persistent state (TD-057 — persistent Python session — open P2).
+Output cap — 256 KiB.
+Timeout cap — 600 секунд.
+Применение
+¶
+Math и data manipulation в изолированной среде.
+Script generation моделью и его выполнение в один turn.
+Sub-language для агента: модель пишет Python, наблюдает stdout, итеративно debug'ит.
+Дальше
+¶
+ADR-0073
+.
+Production → Sandbox isolation
+— выбор backend для python_exec.

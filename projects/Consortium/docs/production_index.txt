@@ -1,0 +1,255 @@
+Production
+¶
+Канонический production stack: Postgres + pgvector, vault backends, mitmproxy egress sidecar, GVisor sandbox, CostGuard, Langfuse, Kubernetes Helm chart. Полные guides —
+docs/deployment.md
+и
+docs/k8s-deployment.md
+.
+Схема production stack
+¶
+flowchart TB
+    Client[Client / TG / SDK]
+    Client --> API[FastAPI REST + SSE<br/>agenticos.api]
+    API --> Harness[Harness<br/>stateless]
+    Harness --> Postgres[(PostgresSessionStore<br/>+ pgvector для memory)]
+    Harness --> Pool[PooledGVisorBackend]
+    Pool --> Worker1[gVisor worker 1<br/>tools]
+    Pool --> Worker2[gVisor worker 2<br/>tools]
+    Worker1 -.->|HTTPS_PROXY| Mitm[mitmproxy sidecar<br/>credential injection]
+    Worker2 -.->|HTTPS_PROXY| Mitm
+    Mitm -.->|TCP+JSON-RPC| Vault[HashiCorpVault<br/>или KeyringVault]
+    Harness -.->|spans| Langfuse[Langfuse<br/>self-hosted]
+    K8s[K8s + Helm chart<br/>RuntimeClass=gvisor]
+Компоненты
+¶
+Postgres + pgvector
+Production-grade event log и three-tier memory. Multi-tenant с tenant_id колонкой и опциональные RLS политики (ADR-0096). Migration tool SQLite → Postgres (TD-060).
+ADR-0032, 0034, 0035, 0096
+Vault backends
+KeyringVault (single-host), EnvVault (CI / Docker), HashiCorpVault / OpenBao (multi-host) с KV v2, AppRole / K8s auth, TTL cache, active invalidate push при rotation.
+ADR-0027, 0030, 0041, 0091
+mitmproxy egress sidecar
+Out-of-process credential injection на TLS-границе. Vault физически в parent-процессе. Sandbox получает
+HTTPS_PROXY=http://127.0.0.1:18443
+. На каждом запросе mitmproxy addon обращается к parent через TCP+JSON-RPC.
+ADR-0040, 0047, 0091
+Sandbox isolation
+InProcess (dev), Subprocess (Linux + Windows), GVisor (Linux / WSL2 kernel-level), Pooled варианты. Per-call worker recycle для kernel state isolation (ADR-0095).
+ADR-0033, 0036, 0042, 0045, 0046, 0095
+CostGuard (USD budget)
+Per-session USD budget через PricingTable и Decimal. Cumulative cross-session ledger для denial-of-wallet protection (per-agent и per-enduser rolling windows). Aux USD из TTS и web_search в общий budget.
+ADR-0015, 0022, 0090
+Langfuse observability
+Self-hosted Langfuse через
+setup_langfuse_tracer
+. OpenInference + OpenTelemetry spans. Pricing snapshot sync для accurate USD (353 OpenRouter моделей в Langfuse).
+ADR-0014, 0017, 0060
+Kubernetes Helm chart
+Helm chart с production safety guards: global.environment=production активирует strict mode, vault devMode refuse, RuntimeClass=gvisor lookup, multi-tenant Postgres RLS.
+ADR-0048, 0089, 0096
+Production-shaped driver
+¶
+Файл
+scripts/run_api_server_prod.py
+— canonical driver с full wiring:
+# Конструктивно (упрощённо):
+settings
+=
+get_settings
+()
+# Vault — HashiCorp в k8s, Keyring на single host
+vault
+=
+HashiCorpVault
+(
+...
+)
+if
+settings
+.
+vault_backend
+==
+"hashicorp"
+else
+KeyringVault
+()
+# mitmproxy sidecar (out-of-process)
+sidecar
+=
+MitmproxySidecar
+(
+vault
+=
+vault
+,
+port
+=
+18443
+)
+await
+sidecar
+.
+start
+()
+egress_proxy
+=
+sidecar
+.
+as_proxy
+()
+# Session + memory
+session_store
+=
+PostgresSessionStore
+(
+dsn
+=
+settings
+.
+postgres_dsn
+,
+tenant_id
+=...
+)
+embedding
+=
+GoogleEmbeddingProvider
+(
+api_key
+=
+settings
+.
+gemini_api_key
+)
+memory_store
+=
+PostgresMemoryStore
+(
+dsn
+=
+settings
+.
+postgres_dsn
+,
+embedding_provider
+=
+embedding
+)
+# LLM + observability + cost
+llm
+=
+OpenRouterProvider
+(
+api_key
+=
+settings
+.
+openrouter_api_key
+)
+setup_langfuse_tracer
+(
+public_key
+=
+settings
+.
+langfuse_public_key
+,
+secret_key
+=
+settings
+.
+langfuse_secret_key
+,
+host
+=
+settings
+.
+langfuse_host
+,
+)
+cost_guard
+=
+CostGuard
+(
+budget
+=
+TokenBudget
+(
+max_usd
+=
+Decimal
+(
+"1.00"
+)))
+cumulative_guard
+=
+CumulativeCostGuard
+(
+store
+=
+SQLiteCumulativeBudgetStore
+(
+db_path
+=
+"budgets.db"
+),
+limits
+=
+CumulativeBudgetLimits
+(
+per_enduser_per_day_usd
+=
+Decimal
+(
+"10"
+)),
+)
+# Sandbox — pooled gVisor для production
+backend
+=
+PooledGVisorBackend
+(
+...
+)
+tools
+=
+ToolManager
+(
+backend
+=
+backend
+,
+workspace_root
+=...
+)
+# Регистрация всех необходимых tools
+# FastAPI app
+from
+agenticos.api
+import
+build_app
+,
+APIConfig
+app
+=
+build_app
+(
+APIConfig
+(
+...
+))
+Полный код —
+scripts/run_api_server_prod.py
+.
+Production validation (ADR-0059)
+¶
+Compose-based smoke (
+scripts/production_smoke.py
+) — 10 acceptance сценариев против live stack:
+Health endpoint.
+Auth (JWT delegation).
+Multi-turn conversation.
+Memory archive + recall.
+Cross-restart memory persistence.
+... остальные сценарии.
+Зафиксированный baseline: 10/10 PASS, ~14 секунд wall-clock, $0.013 (Haiku 4.5).

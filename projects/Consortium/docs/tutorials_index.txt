@@ -1,0 +1,92 @@
+Учебник
+¶
+Десять task-oriented рецептов от минимального harness до multi-agent через delegate и CaMeL extraction. Каждый рецепт — самодостаточный (
+python recipe.py
+запускается одной командой). Рецепты с реальной моделью используют
+OPENROUTER_API_KEY
+из
+.env
+.
+Маршрут
+¶
+#
+Рецепт
+API-ключ
+Время
+01
+Hello, Harness — минимальный harness, MockLLM, in-memory SQLite
+не требуется
+~5 мин
+02
+Реальная модель через OpenRouter — Claude Haiku 4.5
+требуется
+~5 мин
+03
+Tools и workspace —
+file_editor
+с sandboxed workspace
+не требуется
+~10 мин
+04
+Three-tier memory — core blocks, archival, recall
+не требуется
+~10 мин
+05
+Policy и plan-only — destructive tool блокируется gate'ом
+не требуется
+~10 мин
+06
+Replay сессии — повторный прогон с другой моделью
+не требуется
+~10 мин
+07
+Custom Tool — регистрация Pydantic-validated executor'а
+не требуется
+~15 мин
+08
+Multi-agent через delegate — supervisor, researcher, writer
+требуется
+~20 мин
+09
+Multimodal —
+multimodal_read
+для image, audio, PDF
+Gemini key
+~15 мин
+10
+CaMeL и
+extract_from_untrusted
+— opt-in Q-LLM extraction
+требуется
+~15 мин
+Рекомендуемый порядок
+¶
+Минимальный путь (около 30 минут):
+01 → 02 → 03 → 04
+. Покрывает core mental model — harness, real LLM, tools, memory.
+Для ML-инженеров, строящих agentic workflow:
+01 → 07 → 08
+. Кратчайший путь к custom tools и multi-agent supervisor.
+Для security-инженеров:
+05 + 10
+. Policy gate и labeled untrusted в работе.
+Замечание о backend'ах
+¶
+Все рецепты используют
+InProcessBackend
+— dev backend без изоляции. Production-конфигурация описана в
+Production → Sandbox isolation
+—
+SubprocessBackend
+,
+GVisorBackend
+, Pooled варианты.
+Tools
+bash
+и
+python_exec
+требуют
+allow_unsafe_tools=True
+на
+InProcessBackend
+. Это намеренная проверка безопасности: соответствующие tools исполняют адresative-генерируемый код и должны работать в изолированной среде.

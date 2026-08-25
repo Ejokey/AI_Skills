@@ -1,0 +1,21 @@
+Integrations
+¶
+HTTP API (REST + SSE), Python SDK, Telegram super-agent, eval pipeline, self-improvement loop, sleep-time consolidation.
+HTTP API (REST + SSE)
+FastAPI control plane — endpoints для sessions, events, SSE streaming, JWT auth. Production-grade интерфейс для external integrations.
+ADR-0054, 0055
+Python SDK
+`AsyncAgenticOSClient` и sync вариант с retry, backpressure, circuit-breaker (TD-048). Используется в `production_smoke` и external integrations.
+ADR-0056
+Telegram super-agent
+aiogram 3.x driver. Per-chat persistent workspace. Managed bots lifecycle. Multi-tenant safety guards. Inline keyboards. Live activity streaming через sendMessageDraft (ADR-0099).
+ADR-0061, 0062, 0063, 0064, 0099
+Eval pipeline
+Native EvalTask, LLMJudge, EvalRunner. Inspect AI adapter (bidirectional). Promptfoo (YAML config + v2 results). OdysseyBench (5 категорий — Word, Excel, PDF, Calendar, Email). BitGN ECOM. Pass^k multi-seed methodology (ADR-0092).
+ADR-0025, 0031, 0043, 0044, 0049, 0067, 0092
+Self-improvement loop
+Replay → judge feedback → LLM-driven AgentSpec tuning. Прогон production trace через judge LLM, выявление failures, tuning prompt / model / tools.
+ADR-0057
+Sleep-time consolidation
+Batch-сервис, суммаризующий old archival entries в semantic clusters по cron. Episodic → semantic memory transition.
+ADR-0058, 0074

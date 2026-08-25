@@ -1,0 +1,164 @@
+Kubernetes Helm chart
+¶
+Reference deployment с production safety guards. ADR-0048 + 0089 + 0096 + 0097. Полный guide —
+docs/k8s-deployment.md
+.
+Установка
+¶
+helm
+install
+agenticos
+./helm/agenticos
+\
+--namespace
+agenticos
+\
+--create-namespace
+\
+-f
+my-values.yaml
+Production safety guards (ADR-0089)
+¶
+values.yaml
+:
+global
+:
+environment
+:
+production
+# активирует strict mode
+vault
+:
+enabled
+:
+true
+devMode
+:
+false
+# в production devMode=true вызывает refuse в init container
+runtimeClassName
+:
+gvisor
+# RuntimeClass lookup в init container; отсутствие → fail
+mitmproxy
+:
+caInstallRequired
+:
+true
+# init container устанавливает CA в trust store
+postgres
+:
+multiTenant
+:
+enabled
+:
+true
+tenantId
+:
+${TENANT_ID}
+enableRls
+:
+true
+# ADR-0096
+Компоненты
+¶
+agenticos-api
+— FastAPI deployment (ADR-0054).
+agenticos-tg-bot
+— Telegram driver (ADR-0061), опционально.
+mitmproxy-sidecar
+— DaemonSet или sidecar в pod (ADR-0040).
+postgres
+— pgvector/pg16, persistent volume.
+vault
+— HashiCorp Vault или OpenBao (ADR-0041).
+Webhook transport (ADR-0097)
+¶
+Telegram driver через aiogram
+SimpleRequestHandler
++ aiohttp app:
+telegramBot
+:
+transport
+:
+webhook
+webhook
+:
+secretToken
+:
+${WEBHOOK_SECRET}
+baseUrl
+:
+https://bot.example.com
+path
+:
+/telegram/${BOT_TOKEN_HASH}
+Multi-region webhook deployment: каждый pod обрабатывает webhook вызовы независимо.
+Multi-tenant Postgres RLS (ADR-0096)
+¶
+Создаётся init job из chart:
+CREATE
+POLICY
+tenant_isolation
+ON
+events
+USING
+(
+tenant_id
+=
+current_setting
+(
+'app.current_tenant_id'
+)::
+text
+);
+CREATE
+POLICY
+tenant_isolation
+ON
+sessions
+USING
+(
+tenant_id
+=
+current_setting
+(
+'app.current_tenant_id'
+)::
+text
+);
+ALTER
+TABLE
+events
+ENABLE
+ROW
+LEVEL
+SECURITY
+;
+ALTER
+TABLE
+sessions
+ENABLE
+ROW
+LEVEL
+SECURITY
+;
+PostgresSessionStore
+выставляет
+SET LOCAL app.current_tenant_id
+на каждом connection acquire.
+K8s smoke validation (TD-063, P2)
+¶
+K8s smoke validation (kind / minikube + helm install + production_smoke) — open P2, trigger-driven при появлении multi-pod deployment.
+Дальше
+¶
+docs/k8s-deployment.md
+— full deployment guide.
+ADR-0048
+.
+ADR-0089
+.
+ADR-0096
+.
+ADR-0097
+.

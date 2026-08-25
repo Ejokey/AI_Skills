@@ -1,0 +1,413 @@
+02 · Реальная модель через OpenRouter
+¶
+Замена
+MockLLMProvider
+на
+OpenRouterProvider
+без изменений в остальной конфигурации. Тот же harness, тот же event log.
+Подготовка
+¶
+Получение API ключа на
+openrouter.ai
+.
+Создание
+.env
+в корне репозитория:
+OPENROUTER_API_KEY=sk-or-v1-...
+APP_URL=https://github.com/yourname/yourproject  # опционально, OpenRouter analytics
+APP_TITLE=My AgenticOS demo                       # опционально
+Код
+¶
+Файл
+real_model.py
+:
+from
+__future__
+import
+annotations
+import
+asyncio
+import
+sys
+from
+datetime
+import
+UTC
+,
+datetime
+from
+uuid
+import
+uuid4
+from
+agenticos
+import
+(
+Agent
+,
+Harness
+,
+OpenRouterProvider
+,
+SQLiteSessionStore
+,
+get_settings
+,
+)
+async
+def
+main
+()
+->
+None
+:
+settings
+=
+get_settings
+()
+if
+not
+settings
+.
+openrouter_api_key
+:
+print
+(
+"OPENROUTER_API_KEY не задан — см. .env.example"
+,
+file
+=
+sys
+.
+stderr
+)
+sys
+.
+exit
+(
+1
+)
+store
+=
+SQLiteSessionStore
+(
+db_path
+=
+":memory:"
+)
+await
+store
+.
+init_schema
+()
+agent
+=
+Agent
+(
+agent_id
+=
+uuid4
+(),
+created_at
+=
+datetime
+.
+now
+(
+UTC
+),
+system_prompt
+=
+"Concise ассистент. Отвечает одним коротким предложением."
+,
+model_id
+=
+"anthropic/claude-haiku-4.5"
+,
+)
+await
+store
+.
+register_agent
+(
+agent
+)
+session
+=
+await
+store
+.
+create_session
+(
+agent
+.
+agent_id
+,
+created_by
+=
+"quickstart-02"
+)
+llm
+=
+OpenRouterProvider
+(
+api_key
+=
+settings
+.
+openrouter_api_key
+,
+app_url
+=
+settings
+.
+app_url
+,
+app_title
+=
+settings
+.
+app_title
+,
+)
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+)
+response
+=
+await
+harness
+.
+handle_user_message
+(
+session
+.
+session_id
+,
+"What is the capital of France?"
+,
+)
+print
+(
+f
+"agent:
+{
+response
+.
+content
+}
+"
+)
+print
+(
+f
+"tokens: in=
+{
+response
+.
+usage
+.
+input_tokens
+}
+out=
+{
+response
+.
+usage
+.
+output_tokens
+}
+"
+)
+if
+__name__
+==
+"__main__"
+:
+asyncio
+.
+run
+(
+main
+())
+Запуск:
+python
+real_model
+.
+py
+# agent: The capital of France is Paris.
+# tokens: in=24 out=10
+Доступные модели
+¶
+OpenRouter — universal aggregator. Полный список —
+openrouter.ai/models
+. Релевантные для AgenticOS:
+model_id
+Класс
+Tools
+Reasoning effort
+Применение
+anthropic/claude-haiku-4.5
+hybrid
+да
+None
+или
+"medium"
+Default для большинства задач
+anthropic/claude-sonnet-4.5
+hybrid
+да
+"medium"
+или
+"high"
+Frontier model для сложных задач
+openai/gpt-5.4-mini
+reasoning
+да
+"high"
+Cheap reasoning
+openai/o3-mini
+reasoning
+да
+"high"
+Reasoning-heavy задачи
+google/gemini-3.5-flash
+reasoning
+да
+"high"
+Fast, cheap, multimodal
+google/gemini-pro
+reasoning
+да
+"high"
+Premium reasoning + multimodal
+Frontier alignment (ADR-0083)
+¶
+Для reasoning-моделей добавляются параметры
+reasoning_effort
+и
+max_tokens
+:
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+max_tokens
+=
+500_000
+,
+# headroom — API клипает до per-model limit
+reasoning_effort
+=
+"high"
+,
+# для reasoning-class моделей
+)
+Эффект: +20–30 ppt Pass¹ на benchmark'ах. Полное обоснование —
+Философия → Thin harness
+.
+Anthropic direct (опционально, text-only)
+¶
+Прямое обращение к Anthropic API без OpenRouter использует
+AnthropicProvider
+. Провайдер text-only (ADR-0084): попытка передать tools поднимает
+LLMPermanentError
+.
+from
+agenticos
+import
+AnthropicProvider
+llm
+=
+AnthropicProvider
+(
+api_key
+=
+settings
+.
+anthropic_api_key
+,
+# из .env: ANTHROPIC_API_KEY=...
+)
+# При вызове с tools=[...] поднимается LLMPermanentError
+Production tool-using deployments используют OpenRouter.
+USD-бюджет
+¶
+OpenRouterProvider
+не отслеживает USD самостоятельно. Для cost control используется
+CostGuard
++
+TokenBudget(max_usd=...)
+:
+from
+decimal
+import
+Decimal
+from
+agenticos
+import
+TokenBudget
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+budget
+=
+TokenBudget
+(
+max_usd
+=
+Decimal
+(
+"0.10"
+),
+max_total_tokens
+=
+20_000
+),
+)
+При превышении поднимается
+BudgetExceededError
+, эмитится
+budget.exceeded
+, сессия переводится в
+errored
+.
+Cumulative cross-session budgets для denial-of-wallet protection —
+Production → CostGuard
+.
+Дальше
+¶
+03 · Tools и workspace
+—
+file_editor
+и sandbox.
+Production → Postgres + pgvector
+— замена SQLite на Postgres.
+Production → CostGuard
+— расширенная конфигурация бюджетов.

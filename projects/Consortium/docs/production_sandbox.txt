@@ -1,0 +1,286 @@
+Sandbox isolation
+¶
+Четыре tier'а isolation: InProcess, Subprocess, GVisor, Pooled варианты. ADR-0033, 0036, 0042, 0045.
+Backend
+Расположение
+Cold start
+Память
+Isolation
+InProcessBackend
+(в
+agenticos.testing
+)
+Текущий Python процесс
+0 мс
+0
+None — dev only
+SubprocessBackend
+(ADR-0033)
+Process per call
+~100–200 мс
+~5–10 МБ
+Process boundary
+PooledSubprocessBackend
+(ADR-0042)
+Pre-warm pool
+~10 мс (warm)
+~5–10 МБ × N
+Process + per-call recycle (ADR-0095)
+GVisorBackend
+(ADR-0036)
+Docker + runsc
+~200–500 мс
+~15–50 МБ
+Kernel-level (user-space kernel)
+PooledGVisorBackend
+(ADR-0045)
+Pre-warm pool
+~30–50 мс (warm)
+varies
+Kernel + per-call recycle
+SubprocessBackend (Linux + Windows portable)
+¶
+from
+agenticos
+import
+SubprocessBackend
+backend
+=
+SubprocessBackend
+(
+python_path
+=
+"/usr/bin/python3.11"
+,
+env_scrub
+=
+True
+,
+timeout_seconds
+=
+600
+,
+)
+tools
+=
+ToolManager
+(
+backend
+=
+backend
+,
+workspace_root
+=
+workspace
+)
+Каждый dispatch создаёт fresh Python process. Коммуникация — stdin/stdout JSON-RPC. На Windows работает (portable). Tools
+bash
+и
+python_exec
+не требуют
+allow_unsafe_tools=True
+.
+PooledSubprocessBackend
+¶
+from
+agenticos
+import
+PooledSubprocessBackend
+,
+WorkerPool
+pool
+=
+WorkerPool
+(
+backend_factory
+=
+lambda
+:
+SubprocessBackend
+(),
+min_workers
+=
+2
+,
+max_workers
+=
+10
+,
+max_calls_per_worker
+=
+1
+,
+# ADR-0095 — kernel state isolation
+)
+backend
+=
+PooledSubprocessBackend
+(
+pool
+=
+pool
+)
+Параметр
+max_calls_per_worker=1
+обеспечивает recycle worker'а после каждого call, защищая от kernel state leakage (TD-020 → ADR-0095).
+GVisorBackend (Linux / WSL2)
+¶
+Установка gVisor:
+curl
+-fsSL
+https://gvisor.dev/archive.key
+|
+sudo
+gpg
+--dearmor
+-o
+/usr/share/keyrings/gvisor-archive-keyring.gpg
+echo
+"deb [arch=
+$(
+dpkg
+--print-architecture
+)
+signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main"
+|
+sudo
+tee
+/etc/apt/sources.list.d/gvisor.list
+sudo
+apt-get
+update
+&&
+sudo
+apt-get
+install
+-y
+runsc
+# Конфиг Docker
+sudo
+runsc
+install
+sudo
+systemctl
+restart
+docker
+from
+agenticos
+import
+GVisorBackend
+backend
+=
+GVisorBackend
+(
+image
+=
+"agenticos-worker:latest"
+,
+runtime
+=
+"runsc"
+,
+network_mode
+=
+"none"
+,
+cpu_limit
+=
+"1.0"
+,
+memory_limit_mb
+=
+512
+,
+)
+Параметр
+network_mode="none"
+важен: sandbox не имеет direct network. Egress осуществляется только через
+HTTPS_PROXY
+к mitmproxy sidecar.
+PooledGVisorBackend (production-heavy)
+¶
+from
+agenticos
+import
+PooledGVisorBackend
+backend
+=
+PooledGVisorBackend
+(
+pool
+=
+WorkerPool
+(
+backend_factory
+=
+lambda
+:
+GVisorBackend
+(
+...
+),
+min_workers
+=
+3
+,
+max_workers
+=
+20
+,
+max_calls_per_worker
+=
+1
+,
+),
+)
+PooledGVisorBackend
++ memory bridge (ADR-0046) — memory доступ из workers через non-loopback bind и
+host.docker.internal
+.
+Helm chart RuntimeClass (ADR-0089)
+¶
+Production Helm chart использует
+RuntimeClass=gvisor
+:
+# values.yaml
+runtimeClassName
+:
+gvisor
+sandbox
+:
+type
+:
+gvisor-pooled
+poolSize
+:
+10
+Init container проверяет наличие RuntimeClass в кластере. Отсутствие приводит к fail-loud (раньше был silent fallback на
+runc
+).
+NDJSON event streaming (ADR-0094)
+¶
+В Pooled backends worker эмитит в parent NDJSON frames:
+{"type": "tool.progress", "tool_call_id": "tc-1", "message": "Step 1..."}
+{"type": "tool.partial_output", "tool_call_id": "tc-1", "delta": "..."}
+{"type": "tool.finished", "tool_call_id": "tc-1", "result": "..."}
+Parent
+WorkerPool
+имеет
+on_event
+callback, который форвардит события в parent
+SessionStore
+. SSE subscribers видят их в real time через
+BroadcastSessionStore
+.
+Дальше
+¶
+Архитектура → Execution plane
+.
+ADR-0033
+.
+ADR-0036
+.
+ADR-0095
+.
+Kubernetes Helm chart
+.

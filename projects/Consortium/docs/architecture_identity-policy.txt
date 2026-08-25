@@ -1,0 +1,408 @@
+Identity & Policy
+¶
+Каждое действие агента имеет цепочку
+enduser → agent → tool
+через
+act
+claim в подписанном delegation token. PolicyEngine реализует deny-by-default с first-match-wins семантикой.
+Principal
+¶
+from
+agenticos
+import
+Principal
+,
+PrincipalKind
+principal
+=
+Principal
+(
+kind
+=
+PrincipalKind
+.
+USER
+,
+# USER | AGENT | SERVICE
+subject
+=
+"user-42"
+,
+roles
+=
+(
+"admin"
+,
+"writer"
+),
+scopes
+=
+(
+"agent:run"
+,
+"tool:read"
+,
+"tool:write"
+),
+)
+Каждое action в audit log имеет атрибут
+principal_subject
+. Соответствующее событие —
+auth.delegation_verified
+, см.
+Event таксономия
+.
+DelegationChain — JWT (RFC 8693 + multi-hop)
+¶
+from
+agenticos
+import
+encode_delegation_token
+,
+decode_delegation_token
+from
+agenticos.contracts.identity
+import
+DelegationChain
+chain
+=
+DelegationChain
+(
+subject
+=
+"user-42"
+,
+act_on_behalf_of
+=
+(
+"agent-7"
+,
+"tool-runner"
+),
+scopes
+=
+(
+"agent:run"
+,),
+purpose
+=
+"weekly-report-generation"
+,
+expires_at
+=
+datetime
+(
+2026
+,
+5
+,
+23
+,
+tzinfo
+=
+UTC
+),
+jti
+=
+"unique-token-id"
+,
+)
+# Encode (HS256)
+secret
+=
+"min-32-char-secret-required-here-please"
+token_str
+=
+encode_delegation_token
+(
+chain
+,
+secret
+=
+secret
+)
+# Decode + verify (async вариант проверяет JTI revocation)
+decoded
+=
+await
+decode_delegation_token_async
+(
+token_str
+,
+secret
+=
+secret
+,
+revocation_store
+=
+jti_store
+,
+)
+Multi-hop
+(ADR-0051): chain может быть глубокой — user → agent → sub-agent → tool-runner. Default
+delegation_max_depth=5
+в
+Settings
+.
+Revocation
+(ADR-0088):
+JtiRevocationStore
+обеспечивает kill-switch.
+SQLiteJtiStore
+для production,
+InMemoryJtiStore
+для tests. После revocation токен с этим
+jti
+отклоняется при decode.
+Asymmetric (RS256 / EdDSA)
+— открытый roadmap. Текущий MVP использует HS256.
+PolicyEngine — deny-by-default
+¶
+from
+agenticos
+import
+PolicyEngine
+,
+Rule
+,
+PolicyMatch
+,
+PolicyEffect
+from
+agenticos
+import
+allow_tool
+,
+deny_tool
+,
+allow_role
+,
+allow_scope
+,
+default_safe_rules
+# Built-in safe preset
+engine
+=
+PolicyEngine
+(
+default_safe_rules
+())
+# Custom rules — first-match-wins
+custom_engine
+=
+PolicyEngine
+([
+deny_tool
+(
+"bash"
+),
+allow_role
+(
+"admin"
+,
+tool
+=
+"file_editor"
+),
+allow_scope
+(
+"tool:read"
+,
+tool
+=
+"memory_search"
+),
+Rule
+(
+effect
+=
+PolicyEffect
+.
+ALLOW
+,
+match
+=
+PolicyMatch
+(
+tool
+=
+"http_client"
+,
+principal_kind
+=
+PrincipalKind
+.
+USER
+),
+reason
+=
+"users can fetch URLs"
+,
+),
+])
+PolicyEngine.decide(context)
+возвращает
+PolicyDecision(effect, reason, matched_rule)
+. Отсутствие сматчившегося правила трактуется как deny.
+Plan-only mode
+¶
+Harness(plan_only=True)
+обеспечивает блокировку всех
+destructive=True
+tools policy gate'ом:
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+tools
+=
+tools
+,
+policy
+=
+PolicyEngine
+(
+default_safe_rules
+()),
+plan_only
+=
+True
+,
+)
+При попытке dispatch destructive tool:
+Событие
+policy.denied
+эмитится в session log.
+Exception
+PolicyDenied
+поднимается из
+tool_manager.dispatch
+.
+Harness ловит, эмитит
+tool.error
+, продолжает loop. Модель видит, что попытка заблокирована.
+Destructive tools в built-in suite:
+file_editor
+(write / delete ops)
+bash
+(всегда destructive — возможна arbitrary state mutation)
+docx_write
+,
+xlsx_write
+pptx_render
+,
+docx_render_pretty
+calendar_event_add
+,
+calendar_event_remove
+,
+calendar_todo_add
+email_send
+voice_synthesize
+(генерирует shareable audio)
+PolicyContext
+¶
+@dataclass
+(
+frozen
+=
+True
+)
+class
+PolicyContext
+:
+tool_name
+:
+str
+tool_destructive
+:
+bool
+principal
+:
+Principal
+|
+None
+delegation
+:
+DelegationChain
+|
+None
+plan_only
+:
+bool
+agent_id
+:
+UUID
+|
+None
+session_id
+:
+UUID
+|
+None
+# Credentials отсутствуют — контракт-тест проверяет отсутствие JWT / secret / token полей
+Vault backends
+¶
+Backend
+Применение
+InMemoryVault
+(в
+agenticos.testing
+)
+dev, unit tests
+KeyringVault
+(ADR-0027)
+Single-host production — OS credential manager (Windows Credential Manager, macOS Keychain, Linux SecretService)
+EnvVault
+(ADR-0030)
+CI, Docker — credentials в env vars
+HashiCorpVault
+(ADR-0041)
+Multi-host production — Vault / OpenBao KV v2 + AppRole / K8s Service Account + TTL cache + active invalidation push (ADR-0091)
+Все vault'ы реализуют
+SecretsVault
+Protocol.
+EgressProxy.inject_credentials(host, headers)
+запрашивает credentials по host'у. Событие
+egress.credentials_injected
+содержит host, scope, principal, но не сам token.
+ADR map
+¶
+ADR
+Что фиксирует
+ADR-0012
+PolicyEngine built-in DSL
+ADR-0013
+JWT HS256 +
+act
+claim
+ADR-0027
+KeyringVault + scoping + TTL
+ADR-0030
+EnvVault
+ADR-0041
+HashiCorpVault / OpenBao
+ADR-0051
+Multi-hop delegation chain
+ADR-0087
+TG multi-tenant safety guard
+ADR-0088
+JTI revocation + kill-switch
+ADR-0091
+Vault active rotation push
+Дальше
+¶
+Production → Vault backends
+.
+Production → mitmproxy sidecar
+.
+Учебник → 05 · Policy + plan-only
+.

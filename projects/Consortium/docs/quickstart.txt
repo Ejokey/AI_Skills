@@ -1,0 +1,407 @@
+Быстрый старт
+¶
+Минимальный AgenticOS harness без API-ключей. In-memory SQLite +
+MockLLMProvider
+. Цель — продемонстрировать архитектурный паттерн Brain / Hands / Session и event log в работе.
+Установка
+¶
+uv
+pip
+git
+clone
+https
+://
+github
+.
+com
+/
+eshastik
+/
+AgenticOS
+cd
+AgenticOS
+uv
+pip
+install
+-e
+".[dev]"
+git
+clone
+https
+://
+github
+.
+com
+/
+eshastik
+/
+AgenticOS
+cd
+AgenticOS
+pip
+install
+-e
+".[dev]"
+Проверка установки:
+python
+-c
+"import agenticos; print('OK,', len(agenticos.__all__), 'top-level имён')"
+# OK, 124 top-level имён
+Минимальный код
+¶
+Файл
+hello.py
+:
+from
+__future__
+import
+annotations
+import
+asyncio
+from
+datetime
+import
+UTC
+,
+datetime
+from
+uuid
+import
+uuid4
+from
+agenticos
+import
+(
+Agent
+,
+Harness
+,
+ModelResponse
+,
+SQLiteSessionStore
+,
+TokenUsage
+,
+)
+from
+agenticos.testing
+import
+MockLLMProvider
+async
+def
+main
+()
+->
+None
+:
+# 1. Session store — append-only журнал событий.
+store
+=
+SQLiteSessionStore
+(
+db_path
+=
+":memory:"
+)
+await
+store
+.
+init_schema
+()
+# 2. Agent — идентичность, к которой привязаны сессии и память.
+agent
+=
+Agent
+(
+agent_id
+=
+uuid4
+(),
+created_at
+=
+datetime
+.
+now
+(
+UTC
+),
+system_prompt
+=
+"Ассистент. Отвечает одним коротким предложением."
+,
+model_id
+=
+"mock-model"
+,
+)
+await
+store
+.
+register_agent
+(
+agent
+)
+session
+=
+await
+store
+.
+create_session
+(
+agent
+.
+agent_id
+,
+created_by
+=
+"quickstart"
+)
+# 3. LLMProvider — реализация Protocol. В production — OpenRouterProvider.
+llm
+=
+MockLLMProvider
+(
+responses
+=
+[
+ModelResponse
+(
+content
+=
+"Привет."
+,
+usage
+=
+TokenUsage
+(
+input_tokens
+=
+12
+,
+output_tokens
+=
+2
+),
+stop_reason
+=
+"end_turn"
+,
+request_id
+=
+"mock-1"
+,
+model_id
+=
+"mock-model"
+,
+),
+],
+)
+# 4. Harness — stateless оркестратор. handle_user_message выполняет один turn.
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+)
+response
+=
+await
+harness
+.
+handle_user_message
+(
+session
+.
+session_id
+,
+"Привет!"
+)
+print
+(
+f
+"agent:
+{
+response
+.
+content
+}
+"
+)
+print
+(
+f
+"tokens: in=
+{
+response
+.
+usage
+.
+input_tokens
+}
+out=
+{
+response
+.
+usage
+.
+output_tokens
+}
+"
+)
+print
+(
+f
+"stop_reason:
+{
+response
+.
+stop_reason
+}
+"
+)
+# 5. Event log — буквальный source of truth.
+print
+(
+"
+\n
+--- event log ---"
+)
+async
+for
+ev
+in
+store
+.
+get_events
+(
+session
+.
+session_id
+):
+print
+(
+f
+"  seq=
+{
+ev
+.
+sequence
+:
+>2
+}
+type=
+{
+ev
+.
+type
+}
+"
+)
+if
+__name__
+==
+"__main__"
+:
+asyncio
+.
+run
+(
+main
+())
+Запуск:
+python
+hello
+.
+py
+Ожидаемый вывод:
+agent: Привет.
+tokens: in=12 out=2
+stop_reason: end_turn
+--- event log ---
+seq= 1  type=session.created
+seq= 2  type=message.user
+seq= 3  type=model.called
+seq= 4  type=model.responded
+seq= 5  type=message.assistant
+Разбор архитектуры
+¶
+Метод
+handle_user_message(session_id, content)
+выполняет следующую последовательность:
+sequenceDiagram
+    actor User
+    participant H as Harness (Brain)
+    participant L as MockLLMProvider
+    participant S as SQLiteSessionStore (Session)
+
+    User->>H: handle_user_message("Привет!")
+    H->>S: emit message.user
+    H->>S: emit model.called
+    H->>L: call(messages, tools=[])
+    L-->>H: ModelResponse
+    H->>S: emit model.responded
+    H->>S: emit message.assistant
+    H-->>User: ModelResponse
+SessionStore.
+Append-only журнал (
+ADR-0004
+). Каждый turn производит не менее трёх событий. Состояние сессии = свёртка над журналом. Реализация для production —
+PostgresSessionStore
+(
+ADR-0032
+) с тем же контрактом.
+Agent.
+Носитель идентичности (
+agent_id
+— UUID). К нему привязаны сессии и memory (
+ADR-0011
+). Сессии — представления над identity-bound state.
+MockLLMProvider.
+Реализация
+LLMProvider
+Protocol. Возвращает заготовленные
+ModelResponse
+. В production заменяется на
+OpenRouterProvider
+(default — ADR-0007) или
+AnthropicProvider
+(text-only — ADR-0084).
+Harness.
+Stateless dispatcher. Метод
+wake(session_id)
+восстанавливает контекст из event log при перезапуске.
+Что дальше
+¶
+Расширение функциональности.
+Учебник
+содержит 10 рецептов: реальная модель через OpenRouter, регистрация tools, three-tier memory, plan-only policy, replay сессии, custom Tool, multi-agent через delegate, multimodal, CaMeL.
+Архитектурное обоснование.
+Философия → Brain / Hands / Session
+— детальный разбор главного инварианта.
+Философия → Labeled untrusted
+— канонический ответ на prompt injection.
+Production deployment.
+Используемая в этом примере конфигурация (
+SQLiteSessionStore
++
+MockLLMProvider
++
+InProcessBackend
+) рассчитана на разработку и unit-тесты. Production-конфигурация — Postgres, vault, mitmproxy sidecar, GVisor sandbox, K8s Helm chart — описана в разделе
+Production
+. Запуск
+bash
+,
+python_exec
+и browser-tools на
+InProcessBackend
+без
+allow_unsafe_tools=True
+блокируется — это намеренная проверка безопасности.

@@ -1,0 +1,197 @@
+Postgres + pgvector
+¶
+ADR-0032 (session), ADR-0034 (memory text), ADR-0035 (pgvector hybrid).
+Установка
+¶
+pip
+install
+-e
+".[postgres,pgvector]"
+# asyncpg + pgvector
+docker
+run
+-d
+--name
+agenticos-postgres
+\
+-e
+POSTGRES_USER
+=
+agenticos
+\
+-e
+POSTGRES_PASSWORD
+=
+agenticos
+\
+-e
+POSTGRES_DB
+=
+agenticos
+\
+-p
+5432
+:5432
+\
+pgvector/pgvector:pg16
+Session store
+¶
+from
+agenticos
+import
+PostgresSessionStore
+store
+=
+PostgresSessionStore
+(
+dsn
+=
+"postgresql://agenticos:agenticos@localhost:5432/agenticos"
+,
+tenant_id
+=
+"my-tenant"
+,
+# multi-tenant (ADR-0096)
+enable_rls
+=
+True
+,
+# Row-Level Security политики (production)
+)
+await
+store
+.
+init_schema
+()
+Tenant isolation: каждая таблица содержит колонку
+tenant_id
+. RLS политики обеспечивают security boundary в дополнение к application-level фильтрации.
+Memory store
+¶
+from
+agenticos
+import
+PostgresMemoryStore
+,
+GoogleEmbeddingProvider
+embedding
+=
+GoogleEmbeddingProvider
+(
+api_key
+=
+os
+.
+environ
+[
+"GEMINI_API_KEY"
+])
+memory_store
+=
+PostgresMemoryStore
+(
+dsn
+=
+"postgresql://..."
+,
+embedding_provider
+=
+embedding
+,
+tenant_id
+=
+"my-tenant"
+,
+enable_rls
+=
+True
+,
+)
+await
+memory_store
+.
+init_schema
+()
+Schema:
+core_blocks(agent_id, name, content, updated_at, tenant_id)
+— индекс на
+(agent_id, tenant_id)
+.
+archival_entries(entry_id, agent_id, content, category, importance, expires_at, created_at, embedding vector(N), tenant_id)
+— GIN индекс на
+tsvector(content)
++ ivfflat / HNSW индекс на
+embedding
+.
+message_history(...)
+для RecallStore (ADR-0093).
+Hybrid retrieval (ADR-0035)
+¶
+result
+=
+await
+memory
+.
+search
+(
+agent_id
+,
+"ananas as a pizza topping"
+,
+limit
+=
+5
+)
+# RRF fusion:
+#   BM25 component  → matches "pineapple", "pizza"
+#   pgvector cosine → matches semantic "fruit on pizza" без лексического перекрытия
+# Top-1: "User prefers pineapple on pizza"
+Эмпирическое доказательство ADR-0035 фиксирует, что hybrid retrieval возвращает корректный entry без лексического пересечения query и контента.
+Multimodal embeddings
+¶
+GoogleEmbeddingProvider
+поддерживает multimodal embeddings через gemini-embedding-2:
+Text passages.
+Images (base64-encoded parts).
+Audio snippets.
+Video.
+PDF.
+Все типы помещаются в одно векторное пространство. Это позволяет архивировать image (например, фотография invoice) и затем выполнять поиск по text query — система находит image entry по семантическому соответствию.
+Migration SQLite → Postgres (TD-060)
+¶
+agenticos-migrate-sqlite-to-postgres
+\
+--sqlite-path
+agenticos.db
+\
+--postgres-dsn
+"postgresql://..."
+\
+--memory
+# включает миграцию memory blocks и archival entries
+Migration сохраняет
+agent_id
+/
+session_id
+/
+event_id
+identity. Idempotent re-runs (re-emit через
+emit_event
+восстанавливает sequence).
+Connection pool и failover
+¶
+PostgresSessionStore
+использует
+asyncpg.pool.Pool
+(default 10 connections). Re-connect при failover поддерживается asyncpg natively.
+Дальше
+¶
+Архитектура → Memory
+.
+ADR-0032
+.
+ADR-0035
+.
+ADR-0096
+.

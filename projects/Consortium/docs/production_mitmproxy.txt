@@ -1,0 +1,175 @@
+mitmproxy egress sidecar
+¶
+ADR-0040 + ADR-0047. Vault физически в parent-процессе. RCE в sandbox не позволяет атакующему получить credentials.
+Архитектура
+¶
+flowchart LR
+    subgraph Parent[Parent process · trusted]
+        H[Harness]
+        V[Vault]
+        CBS[CredentialBridge Server<br/>TCP+JSON-RPC + token auth]
+    end
+    subgraph Sidecar[mitmproxy sidecar process]
+        M[mitmdump<br/>+ addon]
+    end
+    subgraph Sandbox[gVisor sandbox · untrusted]
+        T[http_client / browser]
+    end
+    T -->|"HTTPS_PROXY=127.0.0.1:18443"| M
+    M -->|"on_request → fetch credentials"| CBS
+    CBS --> V
+    V -->|"Credential (headers)"| CBS
+    CBS -->|"headers"| M
+    M -->|"upstream HTTPS<br/>+ injected Authorization header"| Internet
+Установка
+¶
+pip
+install
+-e
+".[network-proxy]"
+# mitmproxy
+Wiring
+¶
+from
+agenticos.hands.proxy
+import
+MitmproxySidecar
+,
+NetworkProxyConfig
+,
+CredentialBridgeConfig
+# 1. CredentialBridge — TCP+JSON-RPC сервер в parent process
+bridge_config
+=
+CredentialBridgeConfig
+(
+bind_host
+=
+"127.0.0.1"
+,
+bind_port
+=
+18444
+,
+auth_token
+=
+"strong-shared-secret"
+,
+)
+# 2. Sidecar — mitmdump в subprocess'е
+sidecar
+=
+MitmproxySidecar
+(
+config
+=
+NetworkProxyConfig
+(
+listen_host
+=
+"127.0.0.1"
+,
+listen_port
+=
+18443
+,
+ca_cert_path
+=
+"ca.pem"
+,
+# ephemeral CA для TLS termination
+),
+credential_bridge_config
+=
+bridge_config
+,
+vault
+=
+vault
+,
+)
+await
+sidecar
+.
+start
+()
+# 3. EgressProxy для tool registration
+egress_proxy
+=
+sidecar
+.
+as_proxy
+()
+tools
+.
+register
+(
+HTTP_CLIENT_TOOL
+,
+make_http_client_executor
+(
+allowed_hosts
+=
+[
+"api.example.com"
+],
+egress_proxy
+=
+egress_proxy
+,
+))
+CA install enforcement (ADR-0091)
+¶
+Sandbox должен trust'ить ephemeral CA для TLS termination. На Helm chart init container устанавливает CA в Chromium policy / system trust store до старта agent container.
+В
+values.yaml
+:
+mitmproxy
+:
+caInstallRequired
+:
+true
+# init container проверяет наличие
+caInstallPath
+:
+/etc/ssl/certs/agenticos-mitm-ca.pem
+Cross-gVisor (ADR-0046)
+¶
+В
+PooledGVisorBackend
+mitmproxy sidecar расположен на host'е, не внутри gVisor container'а. Container конфигурируется с
+HTTPS_PROXY=http://host.docker.internal:18443
+(Docker) или
+--add-host=host.docker.internal:host-gateway
+(Linux). Это паттерн «non-loopback bind».
+Memory bridge (
+MemoryManager
+через TCP+JSON-RPC) использует тот же канал.
+Audit
+¶
+На каждый запрос эмитируются события:
+egress.credentials_injected
+— host, scope_used, vault_backend, credential_metadata. Token не сохраняется.
+egress.denied
+— при отсутствии host'а в allowlist (Python-level check в
+http_client
+).
+Production deployment
+¶
+См.
+docs/k8s-deployment.md
+:
+Sidecar — отдельный container в Pod.
+caInstallRequired=true
+enforce'ит init container.
+mitmproxy слушает на pod-internal address; не exposed на k8s service.
+Дальше
+¶
+ADR-0040
+.
+ADR-0047
+— browser через mitmproxy.
+ADR-0091
+— vault rotation и CA install.
+Vault backends
+.

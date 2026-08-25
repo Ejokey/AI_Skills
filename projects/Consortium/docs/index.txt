@@ -1,0 +1,234 @@
+AgenticOS Cookbook
+¶
+Production-grade операционная среда для AI-агентов. Brain (LLM + harness), Hands (sandbox с инструментами) и Session (event-sourced журнал) — три независимо виртуализируемых компонента с явными контрактами. Целевая планка — Anthropic Managed Agents, LangGraph Platform, E2B: kernel-level изоляция, vault-proxy для секретов, replay-готовность, identity-bound persistent memory.
+v2.1 feature-complete
+139 ADR
+2400+ тестов
+0 P0 + 0 P1
+Python ≥ 3.11
+MIT
+Быстрый старт
+Архитектурная мотивация
+Учебник
+Tool reference
+GitHub
+Метрики проекта
+¶
+139
+принятых ADR
+31
+встроенных tool
+2400+
+unit + contract тестов
+10/10
+import-linter контрактов
+0
+pyright strict errors
+4
+tier'а изоляции
+5
+eval-адаптеров
+124
+публичных имени top-level
+Архитектурные дифференциаторы
+¶
+Brain / Hands / Session
+Три компонента с явными контрактами
+execute / emit+get / wake
+. Brain не имеет прямого доступа к credentials. Session переживает сбой Brain. Hands изолированы. Компрометация одного компонента не распространяется на остальные.
+ADR-0004, ADR-0033, ADR-0040
+Event-sourced session
+Append-only журнал событий. Состояние = свёртка над журналом. Метод
+wake(session_id)
+восстанавливает любого worker'а. Метод
+replay_session()
+воспроизводит сессию с другой моделью.
+ADR-0004, ADR-0016, ADR-0032
+Labeled untrusted content
+Tool output с trust_level untrusted доставляется P-LLM с разметкой
+<untrusted_data>
+, а не auto-redact'ом. Соответствует production-практике Anthropic, OpenAI, Google 2026. Opt-in Q-LLM (QuarantinedLLM) сохраняется для structured extraction.
+ADR-0076 supersedes ADR-0021
+Identity-bound persistent agent
+JWT delegation chain (RFC 8693) сопровождает каждый tool call. Memory привязана к agent_id, сессии — представления. Multi-hop delegation, JTI revocation для kill-switch.
+ADR-0011, ADR-0013, ADR-0051, ADR-0088
+Deny-by-default
+Сеть — egress allowlist через mitmproxy sidecar. Файловая система — workspace-only. Команды — explicit allowlist. Tools — policy gate с plan-only режимом. Vault недоступен в LLM-контексте.
+ADR-0020, ADR-0026, ADR-0040, ADR-0089
+Three-tier memory
+Core blocks (всегда в system prompt), archival (BM25 + pgvector cosine, RRF fusion), cross-session recall. Multimodal embeddings через Gemini gemini-embedding-2 — текст, изображения, аудио в одном векторном пространстве.
+ADR-0010, ADR-0011, ADR-0035, ADR-0093
+Curated public API
+Top-level
+agenticos
+— только production canon и абстрактные Protocols (124 имени). Dev/test helpers (MockLLMProvider, InMemoryVault, InProcessBackend) изолированы в явном subpackage
+agenticos.testing
+.
+ADR-0084
+Thin harness
+Explicit planning DAG не строится поверх reasoning-моделей. Используются
+reasoning_effort="high"
+, prompt caching и principle-based prompts. Эмпирическая валидация: 85.7% Pass¹ на τ²-retail с mid-tier Gemini 3.5 Flash — паритет с Sonnet 4.5 reference.
+ADR-0083, ADR-0080..0082
+Навигация по разделам
+¶
+Быстрый старт.
+Минимальный harness на in-memory SQLite и MockLLMProvider без API-ключей за 5 минут —
+Быстрый старт
+.
+Архитектурная мотивация.
+Эссе о различии function calling / AI-агента / agentic OS, AIOS-7 модули, lethal trifecta, изоляционные tier'ы, Anthropic Managed Agents brain/hands/session split. Около 20 минут чтения —
+Философия → Зачем agenticOS
+.
+Учебник.
+Десять task-oriented рецептов от hello world до multi-agent через delegate, multimodal, CaMeL. Каждый рецепт запускается одной командой —
+Учебник
+.
+Telegram-бот.
+Руководство пользователя: команды, все типы сообщений и медиа, кнопки и подтверждения, проактивные брифы, телефонные звонки и делегированный доступ сотрудников —
+Telegram-бот
+.
+Production.
+Postgres + pgvector, vault backends (Keyring / Env / HashiCorp), mitmproxy egress sidecar, GVisor sandbox, CostGuard, Langfuse, Kubernetes Helm chart с production safety guards —
+Production
+.
+Integrations.
+HTTP API (REST + SSE), Python SDK с retry и circuit-breaker, Telegram super-agent driver, eval pipeline (Inspect AI / Promptfoo / OdysseyBench / BitGN ECOM), self-improvement loop, sleep-time consolidation —
+Integrations
+.
+Установка
+¶
+uv
+pip
+git
+clone
+https
+://
+github
+.
+com
+/
+eshastik
+/
+AgenticOS
+cd
+AgenticOS
+uv
+pip
+install
+-e
+".[dev]"
+git
+clone
+https
+://
+github
+.
+com
+/
+eshastik
+/
+AgenticOS
+cd
+AgenticOS
+pip
+install
+-e
+".[dev]"
+Опциональные extras:
+Extra
+Что добавляет
+postgres
+asyncpg →
+PostgresSessionStore
++ text
+PostgresMemoryStore
+pgvector
+pgvector → гибридный retrieval (BM25 × cosine), multimodal embeddings
+vault
+keyring →
+KeyringVault
+(OS credential store)
+vault-hashicorp
+hvac →
+HashiCorpVault
+(HashiCorp Vault / OpenBao)
+network-proxy
+mitmproxy → out-of-process credential injection
+browser
+cloakbrowser → stealth Chromium
+office
+pdfplumber + python-docx + openpyxl → PDF/DOCX/XLSX tools
+ocr
+pypdfium2 + Pillow → vision-LLM PDF OCR fallback
+email
+aiosmtplib + aioimaplib → SMTP/IMAP
+calendar-ics
+icalendar → ICS calendar tools
+charts
+vl-convert-python → Vega-Lite chart rendering
+vision
+Pillow + pillow-heif + pillow-avif-plugin → HEIC/AVIF
+evals-inspect
+inspect-ai → Inspect AI adapter
+evals-promptfoo
+pyyaml → Promptfoo config/results adapter
+api
+fastapi + uvicorn → REST + SSE control plane
+client
+httpx →
+AsyncAgenticOSClient
+SDK + resilience
+telegram
+aiogram → Telegram bot driver
+cookbook
+mkdocs-material → локальная сборка документации
+Production-зрелость
+¶
+Версия v2.1 feature-complete: 0 P0 + 0 P1 элементов в реестре технического долга.
+Kernel-level изоляция:
+gVisor backend (
+runsc
+), worker pool с per-call recycle (ADR-0095). Firecracker — открытый roadmap.
+Network-boundary credential injection:
+mitmproxy sidecar (ADR-0040 + 0047). Credentials не доступны в LLM-контексте; токены инжектируются на уровне TLS termination.
+Centralised vault:
+HashiCorp Vault / OpenBao с KV v2, AppRole/K8s auth, TTL cache, active invalidate push при rotation (ADR-0041, 0091).
+Three-tier memory:
+SQLite+FTS5 (dev) или Postgres+pgvector (prod) с hybrid retrieval BM25 × cosine (ADR-0035). Multimodal embeddings через Gemini.
+Identity и policy:
+JWT delegation chains RFC 8693, multi-hop (ADR-0051), JTI revocation (ADR-0088), policy DSL с deny-by-default и plan-only mode.
+Cumulative budget protection:
+per-agent и per-enduser rolling windows с USD и token tracking, denial-of-wallet защита (ADR-0090).
+Eval pipeline:
+Inspect AI (SWE-bench, GAIA), Promptfoo, OdysseyBench, BitGN ECOM (ADR-0031, 0043, 0067, 0049), Pass^k multi-seed (ADR-0092).
+Multi-agent:
+supervisor pattern с
+delegate
+и
+submit_result
+, multi-hop delegation chain, subtree cost aggregation (ADR-0050–0053).
+Kubernetes:
+Helm chart с production safety guards (ADR-0048, 0089), multi-tenant Postgres RLS (ADR-0096), webhook transport (ADR-0097).
+Frontier-aligned:
+reasoning_effort
++ prompt caching + thin-harness pivot (ADR-0083). Эмпирическая Pass¹ — 85.7% на τ²-retail с mid-tier model.
+Развёртывание —
+Production → Стек
+.
+Лицензия
+¶
+Версия:
+0.2.0
+(v2.1 feature-complete; PyPI publish — отдельный milestone, см.
+RELEASING.md
+).
+Лицензия:
+MIT.
+Python:
+≥ 3.11.
+Платформы:
+Linux, macOS, Windows. GVisor backend требует Linux или WSL2.
+Issues и PR:
+GitHub
+.

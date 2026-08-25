@@ -1,0 +1,224 @@
+Core tools
+¶
+Пять инструментов базового набора: file_editor, bash, http_client, browser, think.
+file_editor (ADR-0008)
+¶
+Read / write / list файлов в workspace.
+from
+agenticos.hands.tools
+import
+FILE_EDITOR_TOOL
+,
+file_editor_executor
+tools
+.
+register
+(
+FILE_EDITOR_TOOL
+,
+file_editor_executor
+)
+Operations:
+read
+:
+{op: "read", path: "..."}
+→
+{"content": "..."}
+write
+:
+{op: "write", path: "...", content: "..."}
+→
+{"bytes_written": N}
+(destructive)
+list
+:
+{op: "list", path: "..."}
+→
+{"entries": [...]}
+delete
+:
+{op: "delete", path: "..."}
+→
+{"deleted": "..."}
+(destructive)
+exists
+:
+{op: "exists", path: "..."}
+→
+{"exists": true|false}
+Trust level —
+trusted
+. Boundary check выполняется через
+WorkspacePath.resolve
+.
+bash (ADR-0024)
+¶
+Shell command execution в workspace с cwd lock, env scrub, timeout cap.
+from
+agenticos.hands.tools
+import
+BASH_TOOL
+,
+make_bash_executor
+tools
+.
+register
+(
+BASH_TOOL
+,
+make_bash_executor
+(
+min_scrub_bytes
+=
+8
+))
+Атрибут
+requires_isolation=True
+. Не работает на
+InProcessBackend
+без
+allow_unsafe_tools=True
+.
+Input:
+{command: str, timeout_seconds: int = 60}
+.
+Output:
+{"stdout": "...", "stderr": "...", "exit_code": N, "truncated": bool}
+. Trust level —
+untrusted
+.
+Безопасность:
+cwd locked на workspace.
+env scrub — сохраняются только PATH, HOME, LANG и аналогичные системные переменные. AWS/SSH credentials zeroed.
+output cap — 256 KiB stdout + stderr.
+timeout cap — 600 секунд.
+credentials scrub в output — значения длиной не менее 8 символов (default, настраивается параметром
+min_scrub_bytes
+), совпадающие с vault entries, заменяются на
+***
+.
+http_client (ADR-0020)
+¶
+HTTP GET / HEAD против egress allowlist hosts.
+from
+agenticos.hands.tools
+import
+HTTP_CLIENT_TOOL
+,
+make_http_client_executor
+tools
+.
+register
+(
+HTTP_CLIENT_TOOL
+,
+make_http_client_executor
+(
+allowed_hosts
+=
+[
+"api.example.com"
+,
+"*.openrouter.ai"
+],
+egress_proxy
+=
+egress_proxy
+,
+))
+Input:
+{op: "get"|"head", url: str, headers: dict | None}
+.
+Output:
+{"status_code": N, "headers": {...}, "body": "..."}
+. Trust level —
+untrusted
+.
+Безопасность:
+Python-уровневый allowlist — host check до выполнения запроса.
+Credential injection через EgressProxy (in-process middleware или mitmproxy sidecar, ADR-0040).
+Событие
+egress.credentials_injected
+содержит host, scope, vault backend.
+Событие
+egress.denied
+эмитится при отсутствии host'а в allowlist.
+browser (ADR-0023)
+¶
+Stealth Chromium через CloakBrowser — patched Chromium со stealth-функциями против anti-bot.
+from
+agenticos.hands.tools
+import
+BROWSER_TOOL
+,
+make_browser_executor
+tools
+.
+register
+(
+BROWSER_TOOL
+,
+make_browser_executor
+(
+egress_proxy
+=
+egress_proxy
+,
+# ADR-0047 — credentials через mitmproxy
+))
+Установка:
+pip install -e ".[browser]"
+.
+Operations:
+navigate(url)
+→
+{"final_url": "...", "title": "...", "html_snapshot": "..."}
+(untrusted)
+screenshot()
+→
+{"path": "browser/screenshot.png"}
+wait_for(selector, timeout=30)
+→
+{"appeared": true|false}
+evaluate_js(script)
+→
+{"result": ...}
+Trust level —
+untrusted
+(произвольный web content + JS-evaluated).
+think (ADR-0080)
+¶
+No-op scratchpad для reasoning audit trail.
+from
+agenticos.hands.tools
+import
+THINK_TOOL
+,
+think_executor
+tools
+.
+register
+(
+THINK_TOOL
+,
+think_executor
+)
+Альтернативная регистрация через
+register_think_tool(tools)
+.
+Input:
+{thought: str}
+. Output:
+{"acknowledged": true}
+.
+Используется в Quesma + think prompt patterns (ADR-0080 Phase A). Реальной работы не выполняет; присутствует в event log как
+tool.called
+, обеспечивая видимость agent reasoning. Для reasoning-моделей с
+reasoning_effort="high"
+обычно избыточен; полезен для non-reasoning моделей.
+Дальше
+¶
+Архитектура → Execution plane
+— спецификация ToolManager и backends.
+Production → mitmproxy sidecar
+— out-of-process credential injection для http_client и browser.

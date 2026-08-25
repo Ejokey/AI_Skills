@@ -1,0 +1,274 @@
+Глоссарий
+¶
+Алфавитный список ключевых терминов AgenticOS.
+ADR (Architecture Decision Record).
+Документ, фиксирующий архитектурное решение с альтернативами и trade-off'ами. Пишется до кода. Immutable после статуса
+Accepted
+. См.
+ADR-first дисциплина
+.
+Agent.
+Носитель идентичности. Содержит
+agent_id
+(UUID),
+system_prompt
+,
+model_id
+. Memory привязана к нему, не к session.
+agenticos.testing.
+Namespace для dev/test helpers (
+MockLLMProvider
+,
+InMemoryVault
+,
+InProcessBackend
+). Из top-level
+agenticos.*
+не доступен (ADR-0084).
+AIOS.
+AI Agent Operating System. Академический фреймворк (Mei et al., COLM 2025). Семь модулей LLM Kernel: Scheduler, Context Manager, Memory Manager, Storage Manager, Tool Manager, Access Manager, LLM System Call Interface.
+Append-only event log.
+SessionStore
+— журнал событий, в который возможна только запись. Состояние сессии = свёртка над журналом. См.
+Архитектура → Event таксономия
+.
+Archival memory.
+Долгосрочное хранилище фактов в
+MemoryStore
+(SQLite FTS5 или Postgres + pgvector). Hybrid retrieval —
+BM25 × cosine × recency × √importance
+.
+bind_lock.
+Устаревший компонент — global serialization mutex в
+ToolManager
+. Удалён в ADR-0100; заменён
+contextvars.ContextVar
+.
+Brain.
+Trusted-компонент: Harness + LLMProvider + Policy. Не имеет direct access к credentials.
+CaMeL (Capabilities for Machine Learning).
+Dual-LLM паттерн (Debenedetti et al., 2024) для защиты от prompt injection. Privileged LLM (P-LLM) выполняет основную работу, Quarantined LLM (Q-LLM) извлекает structured data из untrusted content. В AgenticOS — opt-in для structured extraction (ADR-0018, ADR-0076 supersedes ADR-0021).
+Control plane.
+Trusted-плоскость: Brain, Session, Vault, Policy. Untrusted code не исполняется.
+Core memory block.
+Заметка длиной до 8K символов в
+MemoryStore
+. Инжектируется в system prompt каждого turn'а. Letta-style. Identity-bound через
+agent_id
+.
+Credential.
+Pre-validated headers для injection в HTTP request. Возвращается из
+SecretsVault.get_credential(host, principal)
+. Raw token из vault не извлекается.
+destructive=True
+.
+Flag на
+Tool
+. Policy gate блокирует destructive tools в
+plan_only=True
+mode. Также влияет на audit (event
+tool.called
+имеет
+destructive=true
+).
+DelegationChain.
+JWT по RFC 8693, описывающий цепочку делегирования. Multi-hop:
+subject → act_on_behalf_of[0] → ... → act_on_behalf_of[N]
+. JTI revocation для kill-switch (ADR-0088).
+Deny-by-default.
+Архитектурный принцип: сеть, файлы, команды, tools закрыты до явного включения по allowlist.
+EgressProxy.
+Out-of-process credential injection через mitmproxy sidecar (ADR-0040) или in-process middleware. Vault не доступен в sandbox.
+Event sourcing.
+Append-only журнал событий. Состояние = fold над журналом. Замена CRUD snapshot-у. ADR-0004.
+Execution plane.
+Untrusted, ephemeral. Sandbox + tools + workspace. См.
+Архитектура → Execution plane
+.
+Firecracker.
+AWS microVM technology с hardware-level isolation (KVM + minimal VMM). ~3 МБ memory overhead, <125 мс cold start. Применяется в AWS Lambda, Fargate, E2B, Vercel Sandbox. В AgenticOS — open roadmap.
+gVisor.
+Google user-space kernel (Go). Runtime
+runsc
+перехватывает syscalls. Применяется в OpenAI Code Interpreter, Modal, GKE Sandbox. В AgenticOS —
+GVisorBackend
+(ADR-0036).
+Hands.
+Execution plane: ToolManager + SandboxBackend + Workspace + Tools.
+Hybrid retrieval.
+BM25 + pgvector cosine + RRF fusion
+для memory search (ADR-0035).
+Identity-bound.
+Memory и sessions привязаны к
+agent_id
+(UUID), не к session_id. Сессии — представления над identity-bound state.
+InProcessBackend.
+SandboxBackend
+без isolation для dev и unit tests. Расположен в
+agenticos.testing
+. Требует
+allow_unsafe_tools=True
+для bash и python_exec.
+JTI revocation.
+JWT ID blocklist для kill-switch (ADR-0088).
+SQLiteJtiStore
+для production,
+InMemoryJtiStore
+для tests.
+Labeled untrusted content.
+Tool output с
+trust_level="untrusted"
+, обёрнутый в
+<untrusted_data tool_call_id="...">...</untrusted_data>
+маркеры. Модель обучена на уровне system prompt к quoting и summarising, но не к treating instructions as commands. ADR-0076 supersedes ADR-0021.
+Lethal trifecta.
+Simon Willison (июнь 2025): три свойства, делающие агента структурно уязвимым — приватные данные, untrusted content, способность к внешней коммуникации.
+Letta (бывший MemGPT).
+Reference implementation подхода «LLM as OS» — three-tier memory (core, recall, archival). AgenticOS заимствует терминологию.
+LLMProvider.
+Protocol. Сигнатура:
+call(model_id, messages, *, tools=, max_tokens=, reasoning_effort=, ...) → ModelResponse
+. Реализации: OpenRouter (default, ADR-0007), Anthropic (text-only, ADR-0005), Mock (testing).
+Managed Agents.
+Anthropic Managed Agents (8 апреля 2026). Public reference brain/hands/session split. AgenticOS следует тому же паттерну.
+mitmproxy sidecar.
+Out-of-process credential injection на TLS termination (ADR-0040). Vault физически в parent-процессе.
+Multi-tenant Postgres RLS.
+Row-Level Security политики на Postgres tables.
+tenant_id
+column + RLS predicates. ADR-0096.
+Pass^k / Pass@k.
+Multi-seed eval methodology. Pass@k — best of k seeds. Pass^k — all k seeds pass. ADR-0092.
+P-LLM.
+Privileged LLM. Главная модель агента; имеет tools. Видит labeled untrusted content (после ADR-0076).
+plan_only
+.
+Mode flag на Harness. PolicyEngine блокирует все
+destructive=True
+tools. Применение — dry-run и human-in-the-loop workflow.
+Principal.
+Носитель идентичности в policy context.
+PrincipalKind = USER | AGENT | SERVICE
+. Содержит
+subject
+,
+roles
+,
+scopes
+.
+Q-LLM (Quarantined LLM).
+Изолированный LLM без tools, без памяти, без истории беседы. Используется в
+extract_from_untrusted
+для structured extraction. ADR-0018.
+Reasoning effort.
+Параметр для reasoning-моделей (gpt-5.x, o-series, Sonnet 4.5+):
+minimal | low | medium | high | xhigh
+. ADR-0083.
+Recall.
+Cross-session message history search. FTS5 индекс над messages всех сессий того же
+agent_id
+. ADR-0093.
+Reduce-pass.
+reduce_events_to_messages
+— fold над event log в список
+Message
+для LLM. Включает labeled untrusted wrapping.
+Replay.
+replay_session(source_id, new_model_id=?)
+— повторный прогон completed event log через новый Harness с новой моделью. ADR-0016.
+RFC 8693 (OAuth 2.0 Token Exchange).
+Стандарт delegation tokens.
+act
+claim для chain. AgenticOS реализует через JWT HS256 (ADR-0013) с multi-hop поддержкой (ADR-0051).
+RRF (Reciprocal Rank Fusion).
+Fusion algorithm для hybrid retrieval. Объединяет ranks из BM25 и dense (cosine).
+Sandbox.
+Изолированное окружение для tool execution. Четыре tier'а: InProcess, Subprocess, GVisor, Pooled варианты. Hardware-virtualization tier (Firecracker) — open roadmap.
+Session.
+Append-only event log одной беседы. Содержит
+session_id
+,
+agent_id
+,
+status
+(
+active | completed | errored
+).
+Sleep-time consolidation.
+Batch-сервис, суммаризующий old archival entries в semantic clusters. Episodic → semantic memory. ADR-0058, 0074.
+SubprocessBackend.
+Process-per-call sandbox. Linux и Windows portable. ADR-0033. Дополняется
+PooledSubprocessBackend
+(ADR-0042).
+Subtree cost aggregation.
+В multi-agent сценариях spend sub-agent записывается под orchestrator's
+agent_id
+. TD-044.
+Tech debt registry.
+Централизованный
+docs/tech-debt.md
+с P0/P1/P2 приоритизацией. ADR-0086.
+Telegram super-agent.
+AgenticOS Telegram-bot deployment: per-chat persistent workspace, multi-tenant guards, sendMessageDraft live activity (ADR-0099), aiogram 3.x.
+Thin harness.
+Принцип: не строить explicit planning DAG поверх reasoning-моделей.
+reasoning_effort="high"
++ prompt caching > explicit scaffolding. ADR-0083.
+Tool.
+Pydantic-style спецификация:
+name
+,
+description
+,
+input_schema
+(JSON Schema),
+destructive
+,
+requires_isolation
+,
+output_trust_level
+,
+concurrent
+. Плюс
+ToolExecutor
+coroutine.
+ToolBinding.
+Per-turn state в
+ToolManager
+'s
+contextvars.ContextVar
+(ADR-0100). Содержит workspace, agent_id, session_id, memory, principal, delegation, policy и другие.
+ToolManager.
+Registry и dispatcher. После ADR-0100 — immutable registry + per-turn binding через
+contextvars
+.
+TrustLevel.
+trusted | untrusted
+. Tool output trust_level определяет, оборачивается ли content в
+<untrusted_data>
+в reduce. ADR-0019.
+Vault.
+SecretsVault
+Protocol. Backends: InMemory (testing), Keyring (single-host), Env (CI / Docker), HashiCorp / OpenBao (multi-host).
+wake() семантика.
+Stateless Harness восстанавливается из event log при rerun.
+wake(session_id)
+эквивалентен новому
+Harness
+instance +
+reduce_events_to_messages(get_events(session_id))
+.
+Workspace.
+Per-agent (или per-chat) directory; единственное место, куда tools могут писать.
+WorkspacePath.resolve(...)
+enforce'ит boundary (
+WorkspaceBoundaryError
+).
+Дальше
+¶
+Public API
+.
+Архитектура
+.
+Философия
+.

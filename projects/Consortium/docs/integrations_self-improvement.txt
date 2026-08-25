@@ -1,0 +1,174 @@
+Self-improvement loop
+¶
+ADR-0057. Replay production traces → judge feedback → LLM-driven AgentSpec tuning.
+Схема
+¶
+flowchart LR
+    P[Production traces<br/>session log] --> R[replay_session<br/>через current AgentSpec]
+    R --> J[LLMJudge<br/>criteria-based]
+    J --> A[Aggregate<br/>failures]
+    A --> T[Tuning LLM<br/>generates new AgentSpec]
+    T --> V[Validation<br/>eval suite]
+    V -->|pass| New[New AgentSpec<br/>v2]
+    V -->|regress| Loop[Iterate]
+API
+¶
+from
+agenticos.evals.self_improvement
+import
+(
+run_self_improvement
+,
+EvalIteration
+,
+TuningIteration
+,
+TuningResult
+,
+)
+result
+=
+await
+run_self_improvement
+(
+base_spec
+=
+current_spec
+,
+sample_sessions
+=
+[
+session_id_1
+,
+session_id_2
+,
+...
+],
+# production traces
+store
+=
+session_store
+,
+eval_tasks
+=
+validation_tasks
+,
+judge
+=
+judge
+,
+tuning_llm
+=
+openrouter_provider
+,
+max_iterations
+=
+5
+,
+)
+print
+(
+f
+"Final spec:
+{
+result
+.
+final_spec
+}
+"
+)
+for
+iter
+in
+result
+.
+iterations
+:
+print
+(
+f
+"  iter
+{
+iter
+.
+iteration
+}
+: pass_rate=
+{
+iter
+.
+eval_pass_rate
+:
+.2%
+}
+"
+)
+Алгоритм
+¶
+Replay sample sessions
+через
+current_spec
+(текущий prompt / model / tools).
+LLMJudge
+оценивает каждый replay outcome против criteria.
+Aggregate failures
+— выявление паттернов ошибок: излишняя verbosity, пропуск tool X, hallucinated dates.
+Tuning LLM
+генерирует новый prompt, адаптирует tool descriptions, предлагает model swap.
+Validation
+— прогон new spec через held-out eval suite.
+Compare
+— при росте pass rate spec adopt'ится; при регрессии — итерация с предыдущим spec и новым failure pattern.
+Production wiring (open P2)
+¶
+Self-improvement loop как cron job в production:
+# scripts/run_self_improvement_loop.py (open P2 — TD-049)
+async
+def
+main
+():
+while
+True
+:
+sessions
+=
+await
+sample_recent_sessions
+(
+limit
+=
+100
+)
+result
+=
+await
+run_self_improvement
+(
+...
+)
+if
+result
+.
+improved
+:
+await
+deploy_new_spec
+(
+result
+.
+final_spec
+)
+await
+asyncio
+.
+sleep
+(
+86400
+)
+# daily
+Дальше
+¶
+ADR-0057
+.
+Eval pipeline
+.

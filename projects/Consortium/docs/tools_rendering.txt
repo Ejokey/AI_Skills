@@ -1,0 +1,306 @@
+Rendering — charts, Gotenberg, Docgen
+¶
+Pretty document и chart generation. Vega-Lite через vl-convert (в процессе). Gotenberg и Docgen — HTTP sidecar'ы.
+chart_render (ADR-0069)
+¶
+Vega-Lite JSON → PNG / SVG / PDF, в процессе через vl-convert (Rust binary).
+pip
+install
+-e
+".[charts]"
+# vl-convert-python (BSD-3, ~30MB wheel, без Cairo / fontconfig / Chromium deps)
+from
+agenticos.hands.tools
+import
+register_chart_render
+register_chart_render
+(
+tools
+)
+Input:
+{
+"spec"
+:
+{
+"$schema"
+:
+"https://vega.github.io/schema/vega-lite/v5.json"
+,
+"data"
+:
+{
+"values"
+:
+[{
+"x"
+:
+1
+,
+"y"
+:
+5
+},
+{
+"x"
+:
+2
+,
+"y"
+:
+7
+}]},
+"mark"
+:
+"bar"
+,
+"encoding"
+:
+{
+"x"
+:
+{
+"field"
+:
+"x"
+,
+"type"
+:
+"quantitative"
+},
+"y"
+:
+{
+"field"
+:
+"y"
+,
+"type"
+:
+"quantitative"
+}
+}
+},
+"format"
+:
+"png"
+,
+//
+png
+|
+svg
+|
+pdf
+"output_path"
+:
+"chart.png"
+}
+Output — destructive, trust level
+trusted
+:
+{
+"output_path"
+:
+"chart.png"
+,
+"bytes"
+:
+106234
+,
+"format"
+:
+"png"
+}
+Gotenberg sidecar (ADR-0068 Phase A)
+¶
+HTML → PDF, Office → PDF, PDF merge через Gotenberg HTTP service.
+docker
+compose
+-f
+docker/compose/gotenberg.yml
+up
+-d
+export
+AGENTICOS_GOTENBERG_URL
+=
+http://localhost:3000
+from
+agenticos.hands.tools
+import
+register_gotenberg_tools
+register_gotenberg_tools
+(
+tools
+,
+base_url
+=
+os
+.
+environ
+[
+"AGENTICOS_GOTENBERG_URL"
+])
+# Регистрирует: pdf_from_html + pdf_from_office + pdf_merge
+pdf_from_html (destructive)
+¶
+{
+"html"
+:
+"<h1>Hello</h1>..."
+,
+"output_path"
+:
+"report.pdf"
+,
+"paper_format"
+:
+"A4"
+# опционально
+}
+pdf_from_office (destructive)
+¶
+{
+"input_path"
+:
+"report.docx"
+,
+"output_path"
+:
+"report.pdf"
+}
+LibreOffice через Gotenberg, поддерживает .docx, .xlsx, .pptx.
+pdf_merge (destructive)
+¶
+{
+"input_paths"
+:
+[
+"page1.pdf"
+,
+"page2.pdf"
+],
+"output_path"
+:
+"merged.pdf"
+}
+Docgen sidecar (ADR-0068 Phase B + B+ hardening)
+¶
+PPTX и DOCX generation через Node service (PptxGenJS + docx libraries).
+docker
+compose
+-f
+docker/compose/docgen.yml
+up
+-d
+export
+AGENTICOS_DOCGEN_URL
+=
+http://localhost:3001
+from
+agenticos.hands.tools
+import
+register_docgen_tools
+register_docgen_tools
+(
+tools
+,
+base_url
+=
+os
+.
+environ
+[
+"AGENTICOS_DOCGEN_URL"
+])
+# Регистрирует: pptx_render + docx_render_pretty
+pptx_render (destructive)
+¶
+{
+"slides"
+:
+[
+{
+"title"
+:
+"Intro"
+,
+"bullets"
+:
+[
+"Point 1"
+,
+"Point 2"
+]},
+{
+"title"
+:
+"Chart"
+,
+"image_path"
+:
+"chart.png"
+}
+],
+"output_path"
+:
+"deck.pptx"
+}
+Поле
+image_path
+указывает на файл в workspace; контент inline'ится как base64 в payload sidecar'а.
+docx_render_pretty (destructive)
+¶
+{
+"title"
+:
+"Report"
+,
+"sections"
+:
+[
+{
+"heading"
+:
+"Summary"
+,
+"paragraphs"
+:
+[
+"..."
+]},
+{
+"heading"
+:
+"Chart"
+,
+"image_path"
+:
+"chart.png"
+}
+],
+"output_path"
+:
+"report.docx"
+}
+Full-pipeline валидация (ADR-0070)
+¶
+Документированная цепочка
+chart_render → pptx_render → pdf_from_office
+через live LLM-driven harness:
+chart.png  — 106 KB, PNG magic OK
+deck.pptx  — 157 KB, ZIP magic OK, 44 entries
+deck.pdf   — 50 KB, %PDF magic OK
+Файл
+scripts/run_fullpipeline_smoke.py
+запускает полный pipeline (требует все sidecars).
+Дальше
+¶
+ADR-0068
+.
+ADR-0069
+.
+ADR-0070
+.
+Research → Node document generation
+.
+Research → Chart rendering
+.

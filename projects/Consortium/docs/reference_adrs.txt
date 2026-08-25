@@ -1,0 +1,269 @@
+ADR индекс
+¶
+100 принятых ADR. Полный текст каждого — в
+docs/adr/
+.
+Foundation (0001–0009)
+¶
+№
+Заголовок
+Категория
+0001
+Стратегия персистентности процесса разработки
+Process
+0002
+Python как язык реализации
+Stack
+0003
+Изоляция MVP — gVisor
+Isolation
+0004
+Event-sourcing схема SessionStore
+Session
+0005
+LLMProvider abstraction
+Brain
+0006
+Python ≥ 3.11
+Stack
+0007
+OpenRouter как primary
+Brain
+0008
+Tool Protocol MCP-совместимый
+Hands
+0009
+InProcessBackend для Phase 2 dev
+Hands
+Memory + Policy + Observability (0010–0017)
+¶
+№
+Заголовок
+0010
+SQLite + FTS5 storage
+0011
+Three-tier memory + identity-binding
+0012
+PolicyEngine built-in DSL
+0013
+JWT HS256 +
+act
+claim
+0014
+OTel + OpenInference
+0015
+Per-session CostGuard
+0016
+replay_session
+0017
+Langfuse backend
+CaMeL + Tools + Eval (0018–0026)
+¶
+№
+Заголовок
+0018
+CaMeL / Dual-LLM
+0019
+TrustLevel taxonomy
+0020
+http_client + egress allowlist
+0021
+(superseded by 0076) Automatic CaMeL routing
+0022
+USD budget
+0023
+CloakBrowser stealth
+0024
+bash tool с cwd lock
+0025
+Native eval pipeline
+0026
+EgressProxy + SecretsVault
+Production isolation + vault (0027–0036)
+¶
+№
+Заголовок
+0027
+KeyringVault + scoping + TTL
+0028
+Browser credential injection
+0029
+Bash env-var credential injection
+0030
+EnvVault
+0031
+Inspect AI adapter
+0032
+PostgresSessionStore
+0033
+SubprocessBackend
+0034
+PostgresMemoryStore (text)
+0035
+pgvector hybrid + GoogleEmbedding multimodal
+0036
+GVisorBackend
+Cross-process IPC + HA (0037–0048)
+¶
+№
+Заголовок
+0037
+Worker event return path
+0038
+Vault pre-injection
+0039
+Memory bridge TCP+JSON-RPC
+0040
+mitmproxy sidecar credential injection
+0041
+HashiCorp Vault / OpenBao
+0042
+SubprocessBackend worker pool
+0043
+Promptfoo adapter
+0044
+Inspect AI → EvalTask reverse
+0045
+GVisor worker pool
+0046
+Memory bridge через gVisor
+0047
+Browser через mitmproxy sidecar
+0048
+Kubernetes Helm chart
+v2.0 directions (0049–0058)
+¶
+№
+Заголовок
+0049
+BitGN ECOM benchmark adapter
+0050
+Multi-agent supervisor pattern
+0051
+Multi-hop delegation chain
+0052
+delegate tool + AgentSpec registry
+0053
+Parallel tool dispatch
+0054
+HTTP REST API
+0055
+SSE streaming
+0056
+Python SDK
+0057
+Self-improvement loop
+0058
+Sleep-time consolidation
+Production deployment (0059–0063)
+¶
+№
+Заголовок
+0059
+Production deployment validation
+0060
+OpenRouter pricing snapshot
+0061
+Telegram bot integration
+0062
+Managed bots lifecycle
+0063
+Bot-to-bot guards
+TG capability uplift + office tools + eval (0064–0078)
+¶
+№
+Заголовок
+0064
+TG capability uplift
+0065
+Office tools (PDF/DOCX/XLSX)
+0066
+Email + Calendar (ICS, SMTP/IMAP)
+0067
+OdysseyBench adapter
+0068
+Gotenberg + Docgen sidecars
+0069
+Vega-Lite chart_render
+0070
+Full-pipeline live smoke
+0071
+(superseded by 0075) image_read
+0072
+web_search Perplexity
+0073
+python_exec
+0074
+Memory consolidation production wiring
+0075
+Unified multimodal_read (supersedes 0071)
+0076
+Labeled untrusted (supersedes 0021)
+0077
+TG UX reactions + voice OUT
+0078
+TG inline keyboards
+PEV middleware + frontier alignment (0079–0085)
+¶
+№
+Заголовок
+0079
+PEV middleware (ArgumentValidator + PreCompletionChecker + LoopDetector + PostWriteVerifier)
+0080
+Harness uplift Phase A
+0081
+Executable-predicate PostWriteVerifier
+0082
+Outcomes-grader fresh-context critic
+0083
+Frontier alignment refactor (reasoning_effort + prompt caching)
+0084
+Public API rationalisation
+0085
+scripts/ physical layout
+Tech-debt closure (0086–0098)
+¶
+№
+Заголовок
+0086
+Tech debt triage process (P0/P1/P2)
+0087
+TG multi-tenant safety guard
+0088
+JWT revocation + kill-switch
+0089
+Helm production safety guards
+0090
+Cumulative budget — denial-of-wallet
+0091
+Vault rotation + mitm CA install
+0092
+Pass^k methodology
+0093
+Cross-session recall layer
+0094
+NDJSON event streaming worker → parent
+0095
+Per-call worker recycle (kernel state isolation)
+0096
+Multi-tenant Postgres + RLS
+0097
+TG webhook transport
+0098
+PDF OCR via vision-LLM
+TG live activity + concurrency + cookbook (0099–0101)
+¶
+№
+Заголовок
+0099
+TG live activity через sendMessageDraft
+0100
+ToolManager binding через contextvars
+0101
+Cookbook сайт MkDocs Material
+Дальше
+¶
+docs/adr/README.md
+— формат ADR + полный индекс.
+Философия → ADR-first
+— почему мы пишем ADR.

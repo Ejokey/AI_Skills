@@ -1,0 +1,153 @@
+HTTP API — REST + SSE
+¶
+ADR-0054 (REST surface) + ADR-0055 (SSE streaming).
+Установка
+¶
+pip
+install
+-e
+".[api]"
+# fastapi + uvicorn
+Build app
+¶
+from
+agenticos.api
+import
+build_app
+,
+APIConfig
+config
+=
+APIConfig
+(
+session_store
+=
+session_store
+,
+llm
+=
+llm
+,
+tools
+=
+tool_manager
+,
+memory
+=
+memory_manager
+,
+policy
+=
+policy_engine
+,
+pricing_table
+=
+DEFAULT_PRICING_TABLE
+,
+auth_secret
+=
+settings
+.
+jwt_secret
+,
+)
+app
+=
+build_app
+(
+config
+)
+# Run via uvicorn
+# uvicorn my_module:app --host 0.0.0.0 --port 8000
+Routes
+¶
+Method
+Path
+Назначение
+GET
+/v1/health
+Liveness probe
+GET
+/v1/agents
+List agents (JWT auth)
+GET
+/v1/agents/{agent_id}
+Get agent detail
+POST
+/v1/sessions
+Create session (body:
+{agent_id, ...}
+)
+GET
+/v1/sessions/{session_id}
+Get session metadata
+POST
+/v1/sessions/{session_id}/messages
+Send user message (запускает turn)
+GET
+/v1/sessions/{session_id}/events
+List events (pagination via
+after_sequence
+)
+GET
+/v1/sessions/{session_id}/events/stream
+SSE stream — live event tail
+JWT auth
+¶
+Authentication через
+Authorization: Bearer <delegation_token>
+. Token подписан
+auth_secret
+, payload —
+DelegationChain
+(см.
+Identity & Policy
+).
+SSE streaming
+¶
+curl
+-N
+-H
+"Authorization: Bearer ..."
+\
+"http://localhost:8000/v1/sessions/{session_id}/events/stream?after_sequence=0"
+# data: {"event_id":"...","sequence":1,"type":"session.created",...}
+# data: {"event_id":"...","sequence":2,"type":"message.user",...}
+# ...
+BroadcastSessionStore
+фанаут на subscribers. Для multi-pod deployment — wiring
+PubSubBroker
+(Redis):
+from
+agenticos.session.broker
+import
+RedisPubSubBroker
+session_store
+=
+BroadcastSessionStore
+(
+inner
+=
+PostgresSessionStore
+(
+dsn
+=...
+),
+broker
+=
+RedisPubSubBroker
+(
+url
+=
+"redis://...:6379"
+),
+)
+Cross-pod fanout — TD-046.
+Дальше
+¶
+Python SDK
+— клиент против этого API.
+ADR-0054
+.
+ADR-0055
+.

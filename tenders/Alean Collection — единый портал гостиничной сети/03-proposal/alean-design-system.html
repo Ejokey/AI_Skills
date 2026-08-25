@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alean Collection — визуальная концепция портала</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Nunito:wght@300;400;600;700;800&family=Manrope:wght@300;400;500;700;800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════
+   УРОВЕНЬ 1 — ЯДРО
+   Общее для всего портала. Не меняется ни от бренда, ни от контекста.
+   ═══════════════════════════════════════════════════════════ */
+:root{
+  --font-body:'Golos Text',-apple-system,Segoe UI,Roboto,sans-serif;
+
+  --step--1:clamp(.78rem,.76rem + .1vw,.85rem);
+  --step-0:clamp(.95rem,.92rem + .15vw,1.02rem);
+  --step-1:clamp(1.12rem,1.05rem + .35vw,1.35rem);
+  --step-2:clamp(1.45rem,1.3rem + .75vw,2rem);
+  --step-3:clamp(2rem,1.6rem + 2vw,3.4rem);
+  --step-4:clamp(2.6rem,1.8rem + 4vw,5.2rem);
+
+  --sp-1:.35rem; --sp-2:.7rem;  --sp-3:1.1rem; --sp-4:1.7rem;
+  --sp-5:2.6rem; --sp-6:4rem;   --sp-7:6rem;
+
+  --radius-s:6px; --radius-m:14px; --radius-l:26px;
+  --shell:1180px;
+  --ease:cubic-bezier(.2,.7,.25,1);
+  --t-fast:.22s; --t-mid:.5s; --t-slow:.9s;
+
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.42'/%3E%3C/svg%3E");
+}
+
+/* ═══════════════════════════════════════════════════════════
+   УРОВЕНЬ 2 — БРЕНД
+   Акцент, глубокий тон, шрифт заголовков, характер скруглений.
+   Семь наборов. Добавление восьмого — новая запись, не релиз.
+   ═══════════════════════════════════════════════════════════ */
+[data-brand="family"]{
+  --accent:#F2A03D; --accent-ink:#3A2408; --deep:#123B4F;
+  --font-display:'Nunito',sans-serif; --display-weight:800; --display-tracking:-.02em;
+  --brand-radius:22px; --brand-name:"Alean Family";
+}
+[data-brand="club"]{
+  --accent:#1FA090; --accent-ink:#04231F; --deep:#0E3B36;
+  --font-display:'Manrope',sans-serif; --display-weight:800; --display-tracking:-.035em;
+  --brand-radius:10px; --brand-name:"Alean Club";
+}
+[data-brand="select"]{
+  --accent:#7C9A63; --accent-ink:#1B2413; --deep:#24301F;
+  --font-display:'Cormorant Garamond',serif; --display-weight:400; --display-tracking:0;
+  --brand-radius:2px; --brand-name:"Alean Select";
+}
+[data-brand="emerald"]{
+  --accent:#0F6B4F; --accent-ink:#F3EFE4; --deep:#0A2E23;
+  --font-display:'Playfair Display',serif; --display-weight:600; --display-tracking:-.01em;
+  --brand-radius:0px; --brand-name:"Alean Emerald";
+}
+[data-brand="health"]{
+  --accent:#3B7BB8; --accent-ink:#F2F7FB; --deep:#16324D;
+  --font-display:'Manrope',sans-serif; --display-weight:700; --display-tracking:-.025em;
+  --brand-radius:14px; --brand-name:"Alean Health";
+}
+[data-brand="extency"]{
+  --accent:#8479A8; --accent-ink:#F5F2FA; --deep:#2B2438;
+  --font-display:'Cormorant Garamond',serif; --display-weight:400; --display-tracking:.01em;
+  --brand-radius:4px; --brand-name:"Alean Extency";
+}
+[data-brand="residence"]{
+  --accent:#B98A5E; --accent-ink:#2A1D11; --deep:#3A2E24;
+  --font-display:'Nunito',sans-serif; --display-weight:700; --display-tracking:-.015em;
+  --brand-radius:18px; --brand-name:"Alean Residence";
+}
+
+/* ═══════════════════════════════════════════════════════════
+   УРОВЕНЬ 3 — КОНТЕКСТ
+   Море и Горы. Управляет фоном, воздухом и характером света.
+   Ось независима от бренда: Sophia — это Club в Горах.
+   ═══════════════════════════════════════════════════════════ */
+[data-context="sea"]{
+  --surface:#FBFCFD; --surface-2:#F1F5F8; --ink:#0F1E28; --ink-soft:#5A6E7A;
+  --hairline:#DCE5EB;
+  --amb-1:#2E7FA8; --amb-2:#7ECBD8; --amb-3:#0B2E42;
+  --light-angle:172deg; --ctx-name:"Море";
+}
+[data-context="mountains"]{
+  --surface:#FAF9F6; --surface-2:#F0EDE7; --ink:#1B1A17; --ink-soft:#6B665C;
+  --hairline:#E2DDD3;
+  --amb-1:#4A6355; --amb-2:#C7B79A; --amb-3:#1E2622;
+  --light-angle:203deg; --ctx-name:"Горы";
+}
+
+/* ── база ───────────────────────────────────────────────── */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--surface); color:var(--ink);
+  font-family:var(--font-body); font-size:var(--step-0); line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  transition:background var(--t-mid) var(--ease), color var(--t-mid) var(--ease);
+}
+h1,h2,h3{
+  font-family:var(--font-display); font-weight:var(--display-weight);
+  letter-spacing:var(--display-tracking); line-height:1.05; margin:0;
+  transition:font-family var(--t-fast) var(--ease);
+}
+p{margin:0}
+:focus-visible{outline:2.5px solid var(--accent); outline-offset:3px; border-radius:2px}
+.shell{max-width:var(--shell); margin:0 auto; padding-inline:clamp(1.1rem,4vw,2.4rem)}
+.eyebrow{
+  font-size:var(--step--1); letter-spacing:.18em; text-transform:uppercase;
+  font-weight:600; color:var(--accent);
+}
+
+/* ═══════════════ ПАНЕЛЬ УПРАВЛЕНИЯ — сигнатурный элемент ═══════════════ */
+.rail{
+  position:sticky; top:0; z-index:60;
+  background:color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter:blur(18px) saturate(1.4);
+  border-bottom:1px solid var(--hairline);
+  transition:background var(--t-mid) var(--ease), border-color var(--t-mid) var(--ease);
+}
+.rail__in{
+  max-width:var(--shell); margin:0 auto;
+  padding:.85rem clamp(1.1rem,4vw,2.4rem);
+  display:flex; align-items:center; gap:var(--sp-4); flex-wrap:wrap;
+}
+.rail__label{
+  font-size:10px; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--ink-soft); font-weight:600; margin-right:.5rem; white-space:nowrap;
+}
+.chips{display:flex; gap:.4rem; flex-wrap:wrap}
+.chip{
+  border:1px solid var(--hairline); background:transparent; color:var(--ink-soft);
+  font:inherit; font-size:var(--step--1); font-weight:500;
+  padding:.32rem .8rem; border-radius:99px; cursor:pointer;
+  display:inline-flex; align-items:center; gap:.45rem;
+  transition:all var(--t-fast) var(--ease);
+}
+.chip:hover{border-color:var(--ink-soft); color:var(--ink)}
+.chip__dot{width:9px; height:9px; border-radius:99px; background:var(--dot); flex:none}
+.chip[aria-pressed="true"]{
+  background:var(--ink); color:var(--surface); border-color:var(--ink);
+}
+.toggle{display:flex; border:1px solid var(--hairline); border-radius:99px; padding:2px; gap:2px}
+.toggle .chip{border:0; padding:.3rem .95rem}
+.toggle .chip[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink); border:0}
+
+/* читаемый вывод токенов */
+.readout{
+  margin-left:auto; display:flex; gap:1.15rem; align-items:center;
+  font-size:11px; font-variant-numeric:tabular-nums; color:var(--ink-soft);
+}
+.readout div{display:flex; flex-direction:column; line-height:1.35}
+.readout b{color:var(--ink); font-weight:600; letter-spacing:.01em}
+.readout .sw{
+  display:inline-block; width:10px; height:10px; border-radius:2px;
+  background:var(--accent); margin-right:.35rem; vertical-align:-1px;
+  transition:background var(--t-mid) var(--ease);
+}
+@media(max-width:900px){ .readout{display:none} }
+
+/* ═══════════════ БЛОК: HERO ═══════════════ */
+.hero{position:relative; min-height:min(86vh,720px); display:flex; align-items:flex-end; overflow:hidden}
+.hero__media{position:absolute; inset:0; background:var(--deep); transition:background var(--t-slow) var(--ease)}
+.hero__media::before{
+  content:''; position:absolute; inset:-25%;
+  background:
+    radial-gradient(58% 48% at 22% 26%, color-mix(in srgb,var(--amb-2) 68%,transparent) 0%, transparent 62%),
+    radial-gradient(52% 62% at 82% 18%, color-mix(in srgb,var(--accent) 52%,transparent) 0%, transparent 58%),
+    radial-gradient(80% 70% at 50% 108%, var(--amb-3) 12%, transparent 72%),
+    linear-gradient(var(--light-angle), var(--amb-1) 0%, var(--deep) 74%);
+  animation:drift 26s var(--ease) infinite alternate;
+  transition:background var(--t-slow) var(--ease);
+}
+.hero__media::after{
+  content:''; position:absolute; inset:0;
+  background:var(--grain); opacity:.16; mix-blend-mode:overlay; pointer-events:none;
+}
+@keyframes drift{
+  from{transform:translate3d(-1.5%,-1%,0) scale(1.04)}
+  to{transform:translate3d(2%,1.5%,0) scale(1.11)}
+}
+.hero__scrim{
+  position:absolute; inset:0;
+  background:linear-gradient(to top, rgba(0,0,0,.62) 0%, rgba(0,0,0,.18) 42%, transparent 72%);
+}
+.hero__body{position:relative; width:100%; padding-block:var(--sp-6) var(--sp-5); color:#fff}
+.hero__slogan{
+  font-family:var(--font-display); font-weight:var(--display-weight);
+  font-size:var(--step-1); opacity:.9; margin-bottom:var(--sp-2);
+  letter-spacing:var(--display-tracking);
+}
+.hero h1{font-size:var(--step-4); max-width:15ch; margin-bottom:var(--sp-3)}
+.hero__meta{
+  display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center;
+  font-size:var(--step--1); letter-spacing:.06em; text-transform:uppercase;
+  opacity:.85; margin-bottom:var(--sp-4);
+}
+.hero__meta span{display:inline-flex; align-items:center; gap:.5rem}
+.hero__meta span+span::before{content:''; width:3px; height:3px; border-radius:99px; background:currentColor; opacity:.6}
+.photo-note{
+  position:absolute; top:var(--sp-4); right:clamp(1.1rem,4vw,2.4rem);
+  font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:rgba(255,255,255,.55); border:1px solid rgba(255,255,255,.22);
+  padding:.3rem .7rem; border-radius:99px; backdrop-filter:blur(6px);
+}
+
+/* ═══════════════ БЛОК: форма подбора ═══════════════ */
+.finder{
+  background:color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter:blur(20px);
+  border-radius:var(--brand-radius);
+  padding:var(--sp-3);
+  display:grid; grid-template-columns:1.3fr 1.5fr 1.2fr auto; gap:var(--sp-3);
+  align-items:end; max-width:920px;
+  box-shadow:0 22px 60px -22px rgba(0,0,0,.5);
+  transition:border-radius var(--t-mid) var(--ease), background var(--t-mid) var(--ease);
+}
+.field{display:flex; flex-direction:column; gap:.25rem; min-width:0}
+.field label{font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft); font-weight:600}
+.field .val{font-size:var(--step-0); font-weight:500; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.field .val em{font-style:normal; color:var(--ink-soft)}
+.btn{
+  font:inherit; font-weight:600; font-size:var(--step-0);
+  border:0; cursor:pointer; padding:.85rem 1.6rem;
+  border-radius:calc(var(--brand-radius) * .7);
+  background:var(--accent); color:var(--accent-ink);
+  transition:all var(--t-fast) var(--ease); white-space:nowrap;
+}
+.btn:hover{filter:brightness(1.07); transform:translateY(-1px)}
+.btn--ghost{background:transparent; color:var(--ink); box-shadow:inset 0 0 0 1.5px var(--hairline)}
+.btn--ghost:hover{box-shadow:inset 0 0 0 1.5px var(--accent); color:var(--accent)}
+@media(max-width:840px){
+  .finder{grid-template-columns:1fr 1fr; }
+  .finder .btn{grid-column:1/-1}
+}
+
+/* ═══════════════ СЕКЦИИ ═══════════════ */
+.sec{padding-block:var(--sp-7)}
+.sec__head{
+  display:flex; justify-content:space-between; align-items:flex-end;
+  gap:var(--sp-4); margin-bottom:var(--sp-5); flex-wrap:wrap;
+}
+.sec__head h2{font-size:var(--step-3); max-width:18ch}
+.sec__note{font-size:var(--step--1); color:var(--ink-soft); max-width:34ch}
+
+/* ── карточки отелей ── */
+.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:var(--sp-4)}
+.card{
+  border-radius:var(--brand-radius); overflow:hidden; background:var(--surface-2);
+  display:flex; flex-direction:column; cursor:pointer;
+  transition:transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease),
+             border-radius var(--t-mid) var(--ease), background var(--t-mid) var(--ease);
+}
+.card:hover{transform:translateY(-5px); box-shadow:0 20px 44px -20px rgba(0,0,0,.32)}
+.card__media{aspect-ratio:4/3; position:relative; background:var(--deep); overflow:hidden}
+.card__media::before{
+  content:''; position:absolute; inset:0;
+  background:
+    radial-gradient(70% 60% at 28% 22%, color-mix(in srgb,var(--amb-2) 60%,transparent), transparent 66%),
+    linear-gradient(var(--light-angle), var(--amb-1), var(--deep) 82%);
+  transition:background var(--t-slow) var(--ease);
+}
+.card__media::after{content:''; position:absolute; inset:0; background:var(--grain); opacity:.13; mix-blend-mode:overlay}
+.card__stars{
+  position:absolute; top:.75rem; left:.75rem; z-index:2;
+  background:rgba(255,255,255,.16); backdrop-filter:blur(8px);
+  color:#fff; font-size:11px; font-weight:600; letter-spacing:.08em;
+  padding:.25rem .6rem; border-radius:99px;
+}
+.card__hook{
+  position:absolute; bottom:.75rem; left:.75rem; right:.75rem; z-index:2;
+  color:#fff; font-size:var(--step--1); font-weight:500; text-shadow:0 1px 12px rgba(0,0,0,.55);
+}
+.card__body{padding:var(--sp-3) var(--sp-3) var(--sp-4)}
+.card__city{font-size:var(--step--1); color:var(--ink-soft); letter-spacing:.1em; text-transform:uppercase}
+.card__name{font-family:var(--font-display); font-weight:var(--display-weight); font-size:var(--step-1); margin:.3rem 0 .55rem; letter-spacing:var(--display-tracking)}
+.tag{
+  display:inline-block; font-size:11px; font-weight:500;
+  padding:.22rem .6rem; border-radius:99px;
+  background:color-mix(in srgb,var(--accent) 15%, transparent);
+  color:color-mix(in srgb,var(--accent) 78%, var(--ink));
+}
+
+/* ── акция ── */
+.promo{
+  border-radius:var(--brand-radius); overflow:hidden; position:relative;
+  background:var(--deep); color:#fff; padding:var(--sp-6) var(--sp-5);
+  transition:border-radius var(--t-mid) var(--ease), background var(--t-slow) var(--ease);
+}
+.promo::before{
+  content:''; position:absolute; inset:0;
+  background:
+    radial-gradient(60% 120% at 88% 12%, color-mix(in srgb,var(--accent) 62%,transparent), transparent 62%),
+    linear-gradient(var(--light-angle), var(--amb-1) 0%, var(--deep) 68%);
+  transition:background var(--t-slow) var(--ease);
+}
+.promo::after{content:''; position:absolute; inset:0; background:var(--grain); opacity:.14; mix-blend-mode:overlay}
+.promo__in{position:relative; max-width:38ch}
+.promo h3{font-size:var(--step-3); margin-bottom:var(--sp-2)}
+.promo p{opacity:.85; margin-bottom:var(--sp-4)}
+.promo__dates{
+  font-size:var(--step--1); letter-spacing:.08em; text-transform:uppercase;
+  opacity:.7; margin-top:var(--sp-3);
+}
+
+/* ── номера ── */
+.rooms{display:grid; grid-template-columns:repeat(auto-fit,minmax(212px,1fr)); gap:var(--sp-3)}
+.room{
+  border:1px solid var(--hairline); border-radius:var(--brand-radius); padding:var(--sp-3);
+  transition:border-color var(--t-fast) var(--ease), border-radius var(--t-mid) var(--ease);
+}
+.room:hover{border-color:var(--accent)}
+.room__name{font-weight:600; margin-bottom:.6rem}
+.room__specs{display:flex; gap:var(--sp-3); font-size:var(--step--1); color:var(--ink-soft)}
+.room__specs b{display:block; color:var(--ink); font-size:var(--step-0); font-weight:600}
+
+/* ── ленты токенов ── */
+.tokens{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:var(--sp-3); margin-top:var(--sp-4)}
+.token{border:1px solid var(--hairline); border-radius:var(--radius-s); padding:var(--sp-3); font-size:var(--step--1)}
+.token__key{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; color:var(--ink-soft); margin-bottom:.5rem}
+.token__bar{height:34px; border-radius:4px; margin-bottom:.5rem}
+.token__val{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; color:var(--ink)}
+
+/* ── подвал-пояснение ── */
+.foot{border-top:1px solid var(--hairline); padding-block:var(--sp-5); font-size:var(--step--1); color:var(--ink-soft)}
+.foot strong{color:var(--ink)}
+.foot ul{margin:var(--sp-3) 0 0; padding-left:1.1rem; display:grid; gap:.5rem}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none !important; transition-duration:.01ms !important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+
+<body data-brand="family" data-context="sea">
+
+<!-- ══════════ ПАНЕЛЬ УПРАВЛЕНИЯ ══════════ -->
+<div class="rail">
+  <div class="rail__in">
+    <span class="rail__label">Бренд</span>
+    <div class="chips" id="brands"></div>
+
+    <span class="rail__label">Контекст</span>
+    <div class="toggle" id="contexts">
+      <button class="chip" data-ctx="sea" aria-pressed="true">Море</button>
+      <button class="chip" data-ctx="mountains" aria-pressed="false">Горы</button>
+    </div>
+
+    <div class="readout">
+      <div><span>акцент</span><b><span class="sw"></span><span id="ro-accent">—</span></b></div>
+      <div><span>заголовки</span><b id="ro-font">—</b></div>
+      <div><span>радиус</span><b id="ro-radius">—</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ HERO ══════════ -->
+<header class="hero">
+  <div class="hero__media"></div>
+  <div class="hero__scrim"></div>
+  <span class="photo-note">Слот под фото заказчика</span>
+  <div class="hero__body">
+    <div class="shell">
+      <p class="hero__slogan" id="h-slogan">Собрание семейных впечатлений</p>
+      <h1 id="h-title">Alean Family Doville</h1>
+      <div class="hero__meta">
+        <span id="h-stars">5 звёзд</span>
+        <span id="h-city">Анапа</span>
+        <span id="h-meal">Ультра всё включено</span>
+      </div>
+
+      <div class="finder">
+        <div class="field">
+          <label for="f-city">Курорт</label>
+          <div class="val" id="f-city" tabindex="0">Анапа</div>
+        </div>
+        <div class="field">
+          <label for="f-dates">Заезд и выезд</label>
+          <div class="val" id="f-dates" tabindex="0">12 сен — 19 сен</div>
+        </div>
+        <div class="field">
+          <label for="f-guests">Гости</label>
+          <div class="val" id="f-guests" tabindex="0">2 взрослых, 1 ребёнок <em>до 15 лет</em></div>
+        </div>
+        <button class="btn">Найти номер</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════ СЕТКА ОТЕЛЕЙ ══════════ -->
+<section class="sec">
+  <div class="shell">
+    <div class="sec__head">
+      <div>
+        <p class="eyebrow" id="s1-eyebrow">Alean Family</p>
+        <h2 id="s1-title">Курорты бренда</h2>
+      </div>
+      <p class="sec__note">Один и тот же блок каталога. Меняются только токены бренда и данные — вёрстка не пересобирается.</p>
+    </div>
+    <div class="grid" id="hotels"></div>
+  </div>
+</section>
+
+<!-- ══════════ АКЦИЯ ══════════ -->
+<section class="sec" style="padding-top:0">
+  <div class="shell">
+    <div class="promo">
+      <div class="promo__in">
+        <p class="eyebrow" style="color:inherit; opacity:.8">Акция сети</p>
+        <h3>Дети до 15 лет — бесплатно</h3>
+        <p>Дети до 15 лет на дополнительных местах размещаются в отеле бесплатно. Действует во всех курортах коллекции.</p>
+        <button class="btn">Смотреть условия</button>
+        <p class="promo__dates">Срок акции: 19.08.2026 — 29.12.2026</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ НОМЕРА ══════════ -->
+<section class="sec" style="padding-top:0">
+  <div class="shell">
+    <div class="sec__head">
+      <div>
+        <p class="eyebrow">Размещение</p>
+        <h2>Категории номеров</h2>
+      </div>
+      <p class="sec__note">Карточка номера — тот же блок, что и на подсайте любого отеля коллекции.</p>
+    </div>
+    <div class="rooms" id="rooms"></div>
+  </div>
+</section>
+
+<!-- ══════════ ТОКЕНЫ ══════════ -->
+<section class="sec" style="padding-top:0">
+  <div class="shell">
+    <div class="sec__head">
+      <div>
+        <p class="eyebrow">Под капотом</p>
+        <h2>Что именно переключилось</h2>
+      </div>
+      <p class="sec__note">Ядро осталось прежним: сетка, шкала отступов, шрифт основного текста, брейкпоинты.</p>
+    </div>
+    <div class="tokens">
+      <div class="token">
+        <div class="token__key">--accent</div>
+        <div class="token__bar" style="background:var(--accent)"></div>
+        <div class="token__val" id="t-accent">—</div>
+      </div>
+      <div class="token">
+        <div class="token__key">--deep</div>
+        <div class="token__bar" style="background:var(--deep)"></div>
+        <div class="token__val" id="t-deep">—</div>
+      </div>
+      <div class="token">
+        <div class="token__key">--surface (контекст)</div>
+        <div class="token__bar" style="background:var(--surface-2); border:1px solid var(--hairline)"></div>
+        <div class="token__val" id="t-surface">—</div>
+      </div>
+      <div class="token">
+        <div class="token__key">--font-display</div>
+        <div class="token__bar" style="display:flex; align-items:center; font-family:var(--font-display); font-size:24px; font-weight:var(--display-weight)">Аа Бб</div>
+        <div class="token__val" id="t-font">—</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ПОЯСНЕНИЕ ══════════ -->
+<footer class="foot">
+  <div class="shell">
+    <p><strong>Это демонстрация принципа, а не макет портала.</strong> Одна библиотека блоков обслуживает семь брендов и два контекста. Фотография — ключевой носитель эмоции в этом проекте — здесь заменена световыми полями: снимки предоставляет заказчик, и в макетах они займут те же слоты.</p>
+    <ul>
+      <li><strong>Ось «бренд»</strong> задаёт акцент, глубокий тон, шрифт заголовков и характер скруглений: от 22 px у Family до 0 px у Emerald. Шрифт — тоже токен, а не константа.</li>
+      <li><strong>Ось «контекст»</strong> управляет фоном, воздухом и углом света. Оси независимы: Alean Club Sophia — это Club в Горах, а Alean Club Majestic — Club у Моря.</li>
+      <li><strong>Ядро неизменно.</strong> Сетка, шкала отступов, шрифт основного текста и брейкпоинты одинаковы везде — это то, что удерживает семь брендов внутри одной коллекции.</li>
+      <li><strong>Восьмой бренд</strong> — это новая запись с семью значениями токенов. Не релиз, не вёрстка, не участие разработчика.</li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+const BRANDS = {
+  family:{
+    name:'Alean Family', dot:'#F2A03D',
+    slogan:'Собрание семейных впечатлений',
+    hotels:[
+      {n:'Alean Family Doville', c:'Анапа', s:'5★', hook:'Курорт в нормандском стиле', t:'Ультра всё включено'},
+      {n:'Alean Family Riviera', c:'Анапа', s:'4★', hook:'Первый курорт коллекции', t:'Ультра всё включено'},
+      {n:'Alean Family Biarritz', c:'Геленджик', s:'4★', hook:'Реликтовая сосновая роща', t:'Ультра всё включено'}
+    ],
+    rooms:[
+      {n:'Стандарт', a:'21 м²', r:'1 комната'},
+      {n:'Семейный улучшенный', a:'44 м²', r:'2 комнаты'},
+      {n:'Люкс', a:'35 м²', r:'2 комнаты'},
+      {n:'Апартаменты', a:'78 м²', r:'3 комнаты'}
+    ]
+  },
+  club:{
+    name:'Alean Club', dot:'#1FA090',
+    slogan:'Палитра ярких моментов',
+    hotels:[
+      {n:'Alean Club Majestic', c:'Анапа', s:'4★', hook:'Первый отель бренда', t:'Всё включено'},
+      {n:'Alean Club Sophia', c:'Архыз', s:'4★', hook:'Первый в горах «Всё включено»', t:'Всё включено'},
+      {n:'Alean Club Luchi', c:'Анапа', s:'4★', hook:'Рядом с морем', t:'Всё включено'}
+    ],
+    rooms:[
+      {n:'Стандарт', a:'20 м²', r:'1 комната'},
+      {n:'Семейный стандарт', a:'28 м²', r:'2 комнаты'},
+      {n:'Улучшенный', a:'24 м²', r:'1 комната'},
+      {n:'Люкс', a:'38 м²', r:'2 комнаты'}
+    ]
+  },
+  select:{
+    name:'Alean Select', dot:'#7C9A63',
+    slogan:'Отдых по вашему сценарию',
+    hotels:[
+      {n:'Alean Select Pino', c:'Архыз', s:'5★', hook:'Бутик-отель в посёлке Романтик', t:'Полный пансион'},
+      {n:'Alean Select Altair', c:'Архыз', s:'4★', hook:'Горнолыжный склон рядом', t:'Завтраки'},
+      {n:'Alean Select Olginka', c:'Ольгинка', s:'4★', hook:'Собственный пляж', t:'Всё включено'}
+    ],
+    rooms:[
+      {n:'Стандарт оптимум', a:'19 м²', r:'1 комната'},
+      {n:'Улучшенный', a:'36 м²', r:'1 комната'},
+      {n:'Семейный делюкс', a:'47 м²', r:'2 комнаты'},
+      {n:'Семейный люкс', a:'92 м²', r:'2 комнаты'}
+    ]
+  },
+  emerald:{
+    name:'Alean Emerald', dot:'#0F6B4F',
+    slogan:'Искусство впечатлений',
+    hotels:[
+      {n:'Alean Emerald Mandarin Garden', c:'Сочи', s:'5★', hook:'Субтропический парк', t:'Завтраки'}
+    ],
+    rooms:[
+      {n:'Улучшенный', a:'32 м²', r:'1 комната'},
+      {n:'Люкс', a:'54 м²', r:'2 комнаты'},
+      {n:'Панорамный люкс', a:'68 м²', r:'2 комнаты'}
+    ]
+  },
+  health:{
+    name:'Alean Health', dot:'#3B7BB8',
+    slogan:'Забота о важном',
+    hotels:[
+      {n:'Alean Health Essentuki', c:'Ессентуки', s:'4★', hook:'Питьевые источники рядом', t:'Полный пансион'}
+    ],
+    rooms:[
+      {n:'Стандарт', a:'22 м²', r:'1 комната'},
+      {n:'Улучшенный', a:'30 м²', r:'1 комната'},
+      {n:'Семейный', a:'42 м²', r:'2 комнаты'}
+    ]
+  },
+  extency:{
+    name:'Alean Extency', dot:'#8479A8',
+    slogan:'Место силы',
+    hotels:[
+      {n:'Курорт бренда Extency', c:'—', s:'5★', hook:'Медицинский и спа-курорт', t:'По программе'}
+    ],
+    rooms:[
+      {n:'Стандарт', a:'26 м²', r:'1 комната'},
+      {n:'Улучшенный', a:'38 м²', r:'1 комната'},
+      {n:'Люкс', a:'60 м²', r:'2 комнаты'}
+    ]
+  },
+  residence:{
+    name:'Alean Residence', dot:'#B98A5E',
+    slogan:'Всегда как дома',
+    hotels:[
+      {n:'Alean Residence Montvert', c:'Якорная Щель', s:'4★', hook:'Номера-апартаменты', t:'Завтраки'}
+    ],
+    rooms:[
+      {n:'Апартаменты студия', a:'34 м²', r:'1 комната'},
+      {n:'Апартаменты', a:'52 м²', r:'2 комнаты'},
+      {n:'Апартаменты семейные', a:'74 м²', r:'3 комнаты'}
+    ]
+  }
+};
+
+const body = document.body;
+const $ = id => document.getElementById(id);
+
+/* ── строим чипы брендов ── */
+$('brands').innerHTML = Object.entries(BRANDS).map(([k,b],i)=>
+  `<button class="chip" data-brand="${k}" aria-pressed="${i===0}" style="--dot:${b.dot}">
+     <span class="chip__dot"></span>${b.name.replace('Alean ','')}
+   </button>`).join('');
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function render(key){
+  const b = BRANDS[key];
+  const first = b.hotels[0];
+
+  $('h-slogan').textContent = b.slogan;
+  $('h-title').textContent  = first.n;
+  $('h-stars').textContent  = first.s.replace('★',' звёзд');
+  $('h-city').textContent   = first.c;
+  $('h-meal').textContent   = first.t;
+  $('f-city').textContent   = first.c === '—' ? 'Все курорты' : first.c;
+  $('s1-eyebrow').textContent = b.name;
+
+  $('hotels').innerHTML = b.hotels.map(h=>`
+    <article class="card">
+      <div class="card__media">
+        <span class="card__stars">${esc(h.s)}</span>
+        <span class="card__hook">${esc(h.hook)}</span>
+      </div>
+      <div class="card__body">
+        <div class="card__city">${esc(h.c)}</div>
+        <div class="card__name">${esc(h.n)}</div>
+        <span class="tag">${esc(h.t)}</span>
+      </div>
+    </article>`).join('');
+
+  $('rooms').innerHTML = b.rooms.map(r=>`
+    <div class="room">
+      <div class="room__name">${esc(r.n)}</div>
+      <div class="room__specs">
+        <span>Площадь<b>${esc(r.a)}</b></span>
+        <span>Планировка<b>${esc(r.r)}</b></span>
+      </div>
+    </div>`).join('');
+
+  syncReadout();
+}
+
+function syncReadout(){
+  const cs = getComputedStyle(body);
+  const hex = v => {
+    const m = cs.getPropertyValue(v).trim();
+    return m || '—';
+  };
+  const font = cs.getPropertyValue('--font-display').split(',')[0].replace(/['"]/g,'').trim();
+  const radius = cs.getPropertyValue('--brand-radius').trim();
+
+  $('ro-accent').textContent = hex('--accent');
+  $('ro-font').textContent   = font;
+  $('ro-radius').textContent = radius;
+
+  $('t-accent').textContent  = hex('--accent');
+  $('t-deep').textContent    = hex('--deep');
+  $('t-surface').textContent = hex('--surface-2');
+  $('t-font').textContent    = font;
+}
+
+/* ── переключатели ── */
+$('brands').addEventListener('click', e=>{
+  const btn = e.target.closest('[data-brand]');
+  if(!btn) return;
+  [...$('brands').children].forEach(c=>c.setAttribute('aria-pressed','false'));
+  btn.setAttribute('aria-pressed','true');
+  body.dataset.brand = btn.dataset.brand;
+  render(btn.dataset.brand);
+});
+
+$('contexts').addEventListener('click', e=>{
+  const btn = e.target.closest('[data-ctx]');
+  if(!btn) return;
+  [...$('contexts').children].forEach(c=>c.setAttribute('aria-pressed','false'));
+  btn.setAttribute('aria-pressed','true');
+  body.dataset.context = btn.dataset.ctx;
+  setTimeout(syncReadout, 30);
+});
+
+render('family');
+</script>
+</body>
+</html>

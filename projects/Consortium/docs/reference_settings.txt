@@ -1,0 +1,191 @@
+Settings & ENV
+¶
+agenticos.settings.Settings
+(pydantic-settings) — централизованная конфигурация. Прямое чтение
+os.environ
+в business-коде запрещено (см.
+docs/conventions.md
+§12).
+Поля Settings
+¶
+from
+agenticos
+import
+Settings
+,
+get_settings
+settings
+=
+get_settings
+()
+# lru_cache — читается один раз на процесс
+Поле
+Default
+ENV var
+openrouter_api_key
+""
+OPENROUTER_API_KEY
+openrouter_base_url
+"https://openrouter.ai/api/v1"
+OPENROUTER_BASE_URL
+app_url
+None
+APP_URL
+(для OpenRouter analytics)
+app_title
+None
+APP_TITLE
+anthropic_api_key
+""
+ANTHROPIC_API_KEY
+sqlite_path
+"agenticos.db"
+SQLITE_PATH
+langfuse_public_key
+""
+LANGFUSE_PUBLIC_KEY
+langfuse_secret_key
+""
+LANGFUSE_SECRET_KEY
+langfuse_host
+"https://cloud.langfuse.com"
+LANGFUSE_HOST
+delegation_max_depth
+5
+DELEGATION_MAX_DEPTH
+(ADR-0051)
+Settings
+— frozen (immutable после construction). Загружается из
+.env
+или OS env vars.
+ENV vars production driver'ов
+¶
+ENV var
+Default
+Описание
+AGENTICOS_TG_BOT_TOKEN
+required
+Telegram bot token
+AGENTICOS_TG_WORKSPACE_ROOT
+/var/lib/agenticos
+Per-chat workspace root (ADR-0064)
+AGENTICOS_TG_TURN_USD_CAP
+2.0
+Per-turn USD budget
+AGENTICOS_TG_MAX_TOOL_ITERATIONS
+30
+Per-turn tool iteration cap
+AGENTICOS_TG_ENABLE_BASH
+0
+Активация bash tool (требует isolated backend)
+AGENTICOS_TG_MULTI_TENANT
+0
+Fail-loud refuse при unsafe backend (ADR-0087)
+AGENTICOS_TG_TRANSPORT
+polling
+polling
+или
+webhook
+(ADR-0097)
+AGENTICOS_TG_REDIS_URL
+None
+Redis URL для PubSubBroker (TD-046)
+AGENTICOS_GOTENBERG_URL
+—
+Gotenberg sidecar URL (ADR-0068 Phase A)
+AGENTICOS_DOCGEN_URL
+—
+Docgen sidecar URL (ADR-0068 Phase B)
+AGENTICOS_POSTGRES_DSN
+—
+Postgres DSN для PostgresSessionStore
+AGENTICOS_API_LIVE_SMOKE
+0
+Активация real-HTTP integration tests
+AGENTICOS_EMAIL_CONFIG_PATH
+—
+Путь к email-accounts.toml (ADR-0066)
+GEMINI_API_KEY
+—
+Google API для GoogleEmbeddingProvider и multimodal_caller
+PERPLEXITY_API_KEY
+—
+web_search (Perplexity provider)
+TAVILY_API_KEY
+—
+web_search (Tavily provider)
+BRAVE_API_KEY
+—
+web_search (Brave provider)
+ELEVENLABS_API_KEY
+—
+voice_synthesize
+BITGN_API_KEY
+—
+BitGN ECOM benchmark
+Пример .env
+¶
+# AgenticOS .env
+# --- LLM providers ---
+OPENROUTER_API_KEY=sk-or-v1-...
+ANTHROPIC_API_KEY=sk-ant-...      # опционально, direct Anthropic
+GEMINI_API_KEY=AIza...              # для multimodal и embeddings
+# --- Observability ---
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_HOST=http://localhost:3000
+# --- Persistence ---
+AGENTICOS_POSTGRES_DSN=postgresql://agenticos:agenticos@localhost:5432/agenticos
+SQLITE_PATH=agenticos.db
+# --- Telegram driver ---
+AGENTICOS_TG_BOT_TOKEN=1234567890:AAFmK...
+AGENTICOS_TG_WORKSPACE_ROOT=/var/lib/agenticos
+AGENTICOS_TG_MULTI_TENANT=1
+AGENTICOS_TG_TRANSPORT=webhook
+# --- Sidecars ---
+AGENTICOS_GOTENBERG_URL=http://gotenberg:3000
+AGENTICOS_DOCGEN_URL=http://docgen:3001
+# --- Tool APIs ---
+PERPLEXITY_API_KEY=pplx-...
+ELEVENLABS_API_KEY=xi-...
+Конвенция
+¶
+В
+Settings
+поля — plain
+str
+(для env parsing совместимости). Callers оборачивают sensitive значения в
+Secret[str]
+at use site:
+class
+Settings
+(
+BaseSettings
+):
+openrouter_api_key
+:
+str
+=
+""
+# Caller
+from
+agenticos
+import
+OpenRouterProvider
+provider
+=
+OpenRouterProvider
+(
+api_key
+=
+settings
+.
+openrouter_api_key
+)
+# Внутри OpenRouterProvider — обёртка Secret[str], не утекает в logs / spans.
+Дальше
+¶
+Public API
+.
+Conventions
+— полный code style.

@@ -1,0 +1,244 @@
+Office tools — PDF, DOCX, XLSX
+¶
+Pure-Python обработка office-документов. ADR-0065 + ADR-0098 (PDF OCR через vision-LLM).
+Установка
+¶
+pip
+install
+-e
+".[office]"
+# pdfplumber + python-docx + openpyxl
+Регистрация
+¶
+from
+agenticos.hands.tools
+import
+register_office_tools
+,
+office_tools_available
+if
+office_tools_available
+():
+count
+=
+register_office_tools
+(
+tools
+)
+# 5 tools: pdf_read, docx_read, docx_write, xlsx_read, xlsx_write
+pdf_read (ADR-0065 + 0098)
+¶
+Extract text from PDF. Primary engine — pdfplumber, fallback — vision-LLM OCR.
+{
+"path"
+:
+"report.pdf"
+,
+"pages"
+:
+"1-3,5"
+,
+# опционально, default — все страницы
+"ocr"
+:
+"auto"
+|
+"off"
+|
+"force"
+,
+# auto = OCR при пустом text layer
+}
+Output — trust level
+untrusted
+:
+{
+"text"
+:
+"..."
+,
+"page_count"
+:
+12
+,
+"ocr_pages"
+:
+[
+3
+,
+5
+],
+"truncated"
+:
+false
+}
+OCR-режим требует
+pip install -e ".[ocr]"
+(pypdfium2 + Pillow) и
+ocr_provider
+:
+from
+agenticos.hands.tools.pdf_read
+import
+make_pdf_read_executor
+from
+agenticos.contracts.multimodal
+import
+VisionLlmPdfOcrProvider
+ocr
+=
+VisionLlmPdfOcrProvider
+(
+multimodal_caller
+=
+multimodal_caller
+)
+tools
+.
+register
+(
+PDF_READ_TOOL
+,
+make_pdf_read_executor
+(
+ocr_provider
+=
+ocr
+))
+docx_read
+¶
+Extract text и tables from .docx.
+{
+"path"
+:
+"report.docx"
+}
+Output — trust level
+untrusted
+:
+{
+"text"
+:
+"..."
+,
+"tables"
+:
+[[[
+"row1col1"
+,
+"row1col2"
+],
+...
+]],
+"paragraph_count"
+:
+42
+}
+docx_write
+¶
+Create simple .docx. Destructive.
+{
+"path"
+:
+"out.docx"
+,
+"title"
+:
+"..."
+,
+# опционально
+"paragraphs"
+:
+[
+"..."
+],
+"tables"
+:
+[
+...
+]
+}
+Trust level —
+trusted
+(создаётся собственный файл).
+xlsx_read
+¶
+Read cells from workbook.
+{
+"path"
+:
+"data.xlsx"
+,
+"sheet"
+:
+"Sheet1"
+,
+"range"
+:
+"A1:Z100"
+# опционально
+}
+Output —
+trusted
+(per in-ADR-0065 amendment, TD-025):
+{
+"cells"
+:
+[[
+"A1 value"
+,
+"B1 value"
+],
+...
+],
+"sheet_names"
+:
+[
+"Sheet1"
+,
+"Sheet2"
+]
+}
+Cell count cap — 100K.
+xlsx_write
+¶
+Create workbook from data. Destructive.
+{
+"path"
+:
+"out.xlsx"
+,
+"sheets"
+:
+{
+"Sheet1"
+:
+[[
+"A1"
+,
+"B1"
+],
+[
+"A2"
+,
+"B2"
+]],
+"Sheet2"
+:
+[
+...
+]
+}
+}
+Output caps
+¶
+Read tools — 256 KiB на вызов.
+Write tools — 1 MiB на вызов.
+Дальше
+¶
+ADR-0065
+.
+ADR-0098
+— PDF OCR.
+Tools → Rendering
+— pretty DOCX / PDF / PPTX через sidecars.

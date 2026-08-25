@@ -1,0 +1,267 @@
+CostGuard (USD budget)
+¶
+Per-session CostGuard (ADR-0015 + 0022) и cumulative cross-session (ADR-0090) для denial-of-wallet protection.
+Per-session CostGuard
+¶
+from
+decimal
+import
+Decimal
+from
+agenticos
+import
+Harness
+,
+TokenBudget
+,
+CostGuard
+from
+agenticos.contracts.pricing
+import
+DEFAULT_PRICING_TABLE
+budget
+=
+TokenBudget
+(
+max_input_tokens
+=
+200_000
+,
+max_output_tokens
+=
+50_000
+,
+max_total_tokens
+=
+250_000
+,
+max_usd
+=
+Decimal
+(
+"0.50"
+),
+)
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+budget
+=
+budget
+,
+pricing_table
+=
+DEFAULT_PRICING_TABLE
+,
+# 353 моделей OpenRouter
+)
+При превышении поднимается
+BudgetExceededError(kind="input"|"output"|"total"|"usd")
+, эмитируется
+budget.exceeded
+, сессия переходит в
+errored
+.
+Aux USD (TTS + web_search)
+¶
+voice_synthesize
+и
+web_search
+имеют per-call USD (vendor pricing). Метод
+record_aux_usd(amount, source="voice"|"web_search")
+(TD-022 + 023) регистрирует расход в общем budget:
+register_voice_synthesize
+(
+tools
+,
+api_key
+=...
+,
+cost_guard
+=
+cost_guard
+)
+register_web_search
+(
+tools
+,
+api_key
+=...
+,
+provider
+=
+"perplexity"
+,
+cost_guard
+=
+cost_guard
+)
+Aux USD аккумулируется в том же
+max_usd
+budget наряду с LLM tokens.
+Cumulative cross-session (ADR-0090)
+¶
+Denial-of-wallet protection — per-agent и per-enduser rolling windows:
+from
+agenticos
+import
+(
+CumulativeCostGuard
+,
+SQLiteCumulativeBudgetStore
+,
+CumulativeBudgetLimits
+,
+)
+store
+=
+SQLiteCumulativeBudgetStore
+(
+db_path
+=
+"budgets.db"
+)
+await
+store
+.
+init_schema
+()
+limits
+=
+CumulativeBudgetLimits
+(
+per_agent_per_day_usd
+=
+Decimal
+(
+"10.00"
+),
+per_enduser_per_day_usd
+=
+Decimal
+(
+"50.00"
+),
+per_agent_per_hour_usd
+=
+Decimal
+(
+"2.00"
+),
+)
+cumulative_guard
+=
+CumulativeCostGuard
+(
+store
+=
+store
+,
+limits
+=
+limits
+,
+pricing_table
+=
+DEFAULT_PRICING_TABLE
+,
+)
+harness
+=
+Harness
+(
+store
+=
+session_store
+,
+llm
+=
+llm
+,
+cumulative_guard
+=
+cumulative_guard
+,
+enduser_id
+=
+"user-42"
+,
+# scoping для enduser-window
+budget
+=
+per_session_budget
+,
+)
+При превышении —
+CumulativeBudgetExceededError
+, событие
+budget.cumulative_exceeded
+.
+Pricing tables (ADR-0060)
+¶
+DEFAULT_PRICING_TABLE
+— snapshot 353 моделей OpenRouter (
+agenticos/contracts/openrouter_pricing.py
+). Refresh:
+python
+scripts/sync_openrouter_pricing.py
+--refresh
+Multi-provider unified pricing (TD-051):
+from
+agenticos.contracts.multi_provider_pricing
+import
+(
+ANTHROPIC_DIRECT_PRICING_TABLE
+,
+OPENAI_DIRECT_PRICING_TABLE
+,
+GOOGLE_DIRECT_PRICING_TABLE
+,
+build_unified_pricing_table
+,
+)
+unified
+=
+build_unified_pricing_table
+()
+# Direct (Anthropic / OpenAI / Google) + OpenRouter snapshot + sentinel
+Subtree cost aggregation (TD-044)
+¶
+В multi-agent сценариях sub-Harness записывает spend под orchestrator's
+agent_id
+, не leaf's:
+sub_harness
+=
+Harness
+(
+...
+,
+subtree_root_agent_id
+=
+orchestrator
+.
+agent_id
+,
+enduser_id
+=
+parent_enduser_id
+,
+)
+Subtree aggregates в одну ledger-запись, не фрагментирует per delegated sub-agent.
+Дальше
+¶
+Архитектура → Observability
+.
+ADR-0090
+.
+ADR-0060
+.

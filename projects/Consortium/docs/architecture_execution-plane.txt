@@ -1,0 +1,420 @@
+Execution plane — Hands
+¶
+Детальная спецификация Hands:
+ToolManager
+, sandbox-tier'ы, workspace, vault pre-injection, NDJSON event streaming.
+ToolManager
+¶
+После
+ADR-0100
+(2026-05-22)
+ToolManager
+расщеплён на два независимых уровня:
+Immutable Registry
+—
+_tools
+,
+_validators
+,
+_backend
+,
+_default_workspace
+,
+_allow_unsafe_tools
+. Не меняется после конструктора.
+Per-turn Binding
+в
+contextvars.ContextVar
+—
+workspace
+,
+agent_id
+,
+session_id
+,
+memory
+,
+principal
+,
+delegation
+,
+policy
+,
+plan_only
+,
+session_store
+,
+cumulative_guard
+,
+enduser_id
+,
+subtree_root_agent_id
+.
+from
+agenticos
+import
+ToolManager
+from
+agenticos.testing
+import
+InProcessBackend
+tm
+=
+ToolManager
+(
+backend
+=
+InProcessBackend
+(),
+workspace_root
+=
+"/tmp/workspace"
+,
+allow_unsafe_tools
+=
+False
+,
+)
+tm
+.
+register
+(
+FILE_EDITOR_TOOL
+,
+file_editor_executor
+)
+tm
+.
+register
+(
+HTTP_CLIENT_TOOL
+,
+make_http_client_executor
+(
+allowed_hosts
+=
+[
+"api.example.com"
+]))
+# bind() — async context manager. Push на enter, pop на exit.
+async
+with
+tm
+.
+bind
+(
+workspace
+=
+WorkspacePath
+(
+"/workspace/chat-42"
+),
+agent_id
+=
+agent
+.
+agent_id
+,
+session_id
+=
+session
+.
+session_id
+,
+memory
+=
+memory_manager
+,
+principal
+=
+principal
+,
+delegation
+=
+delegation
+,
+policy
+=
+policy_engine
+,
+plan_only
+=
+True
+,
+):
+result
+=
+await
+tm
+.
+dispatch
+(
+tool_call
+)
+Concurrency-семантика: два Harness'а в разных asyncio Task'ах (разные Telegram-чаты на одном singleton
+ToolManager
+) видят собственный binding через изоляцию
+ContextVar
+. Global
+bind_lock
+не требуется.
+Sandbox backends
+¶
+Четыре tier'а изоляции:
+Backend
+Применение
+Cold start
+Память
+Граница безопасности
+InProcessBackend
+(в
+agenticos.testing
+)
+dev, unit tests
+0 мс
+0
+None —
+requires_isolation
+tools заблокированы при
+allow_unsafe_tools=False
+SubprocessBackend
+(ADR-0033)
+production-light, Linux + Windows
+~100–200 мс
+~5–10 МБ
+Process boundary, env scrub
+PooledSubprocessBackend
+(ADR-0042)
+production-heavy
+~10 мс (warm)
+~5–10 МБ × N
+Process + per-call recycle (ADR-0095)
+GVisorBackend
+(ADR-0036)
+untrusted code, Linux / WSL2
+~200–500 мс
+~15–50 МБ
+Kernel-level через runsc
+PooledGVisorBackend
+(ADR-0045)
+production-heavy untrusted
+~30–50 мс (warm)
+varies
+Kernel + per-call recycle
+WorkspacePath — boundary enforcement
+¶
+from
+agenticos.hands.workspace
+import
+WorkspacePath
+,
+WorkspaceBoundaryError
+workspace
+=
+WorkspacePath
+(
+"/workspace/chat-42"
+)
+real_path
+=
+workspace
+.
+resolve
+(
+"data/report.pdf"
+)
+# OK — внутри workspace
+escape
+=
+workspace
+.
+resolve
+(
+"../etc/passwd"
+)
+# raises WorkspaceBoundaryError
+Каждый tool, обращающийся к файловой системе, использует
+workspace.resolve(...)
+для разрешения путей. Это и есть workspace-only mount инвариант из
+философии
+.
+Vault pre-injection (ADR-0038)
+¶
+В worker pool архитектуре credentials не передаются в worker напрямую. Pre-injection pattern:
+Parent process запрашивает credentials из vault до spawn worker'а.
+Worker process получает credentials как часть serialized work payload.
+После tool dispatch credentials в worker'е zeroed-out.
+Паттерн совместим с mitmproxy sidecar (ADR-0040): credentials не покидают parent process, sidecar выполняет credential injection на TLS-границе.
+NDJSON event streaming (ADR-0094)
+¶
+В pooled backends (
+PooledSubprocessBackend
+,
+PooledGVisorBackend
+) worker эмитит события в parent в режиме streaming, не только в конце dispatch'а. Это необходимо для long-running tools (bash с progress output, browser navigation).
+{"type": "tool.progress", "tool_call_id": "tc-1", "message": "..."}
+{"type": "tool.partial_output", "tool_call_id": "tc-1", "delta": "..."}
+{"type": "tool.finished", "tool_call_id": "tc-1", "result": "..."}
+WorkerPool
+имеет
+on_event
+callback, который forward'ит события в parent
+SessionStore
+. SSE subscribers (
+BroadcastSessionStore
+) видят события в real time.
+Регистрация tools
+¶
+from
+agenticos.hands.tools
+import
+(
+FILE_EDITOR_TOOL
+,
+file_editor_executor
+,
+THINK_TOOL
+,
+think_executor
+,
+HTTP_CLIENT_TOOL
+,
+make_http_client_executor
+,
+BASH_TOOL
+,
+make_bash_executor
+,
+register_office_tools
+,
+register_chart_render
+,
+register_web_search
+,
+register_python_exec
+,
+register_voice_synthesize
+,
+register_multimodal_read
+,
+)
+# Прямая регистрация
+tm
+.
+register
+(
+FILE_EDITOR_TOOL
+,
+file_editor_executor
+)
+tm
+.
+register
+(
+THINK_TOOL
+,
+think_executor
+)
+tm
+.
+register
+(
+HTTP_CLIENT_TOOL
+,
+make_http_client_executor
+(
+allowed_hosts
+=
+[
+"api.example.com"
+]))
+# Bulk registration helpers (когда extra установлен)
+office_count
+=
+register_office_tools
+(
+tm
+)
+# 5 office tools если extra присутствует
+chart_count
+=
+register_chart_render
+(
+tm
+)
+web_count
+=
+register_web_search
+(
+tm
+,
+api_key
+=...
+,
+provider
+=
+"perplexity"
+)
+voice_count
+=
+register_voice_synthesize
+(
+tm
+,
+api_key
+=...
+)
+mm_count
+=
+register_multimodal_read
+(
+tm
+,
+multimodal_caller
+=...
+)
+python_count
+=
+register_python_exec
+(
+tm
+)
+Все
+register_*
+helpers возвращают количество зарегистрированных tools (
+0
+, если extra не установлен). Driver'ы могут безопасно вызывать все helpers без
+try/except ImportError
+.
+ADR map
+¶
+ADR
+Что фиксирует
+ADR-0008
+Tool Protocol (MCP-совместимая внутренняя схема)
+ADR-0009
+InProcessBackend для Phase 2
+ADR-0033
+SubprocessBackend
+ADR-0036
+GVisorBackend
+ADR-0042
+SubprocessBackend worker pool
+ADR-0045
+GVisor worker pool
+ADR-0046
+Memory bridge через gVisor
+ADR-0094
+NDJSON event streaming
+ADR-0095
+Per-call worker recycle
+ADR-0100
+ToolManager contextvars binding
+Дальше
+¶
+Tool reference
+— все 31 встроенный tool.
+Production → Sandbox isolation
+— выбор backend для production.
+Учебник → 03 · Tools + workspace
+.

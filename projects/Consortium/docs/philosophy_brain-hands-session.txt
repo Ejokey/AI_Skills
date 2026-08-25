@@ -1,0 +1,401 @@
+Brain / Hands / Session
+¶
+Главная архитектурная аксиома AgenticOS. Зафиксирована в
+CLAUDE.md
+как жёсткий инвариант №1:
+Brain ≠ Hands ≠ Session. Три независимых компонента с явным контрактом
+execute / emitEvent+getEvents / wake+getSession
+. Никогда не сливать в один процесс.
+Происхождение паттерна
+¶
+Anthropic 8 апреля 2026 года опубликовал статью
+Scaling Managed Agents: Decoupling the brain from the hands
+, документирующую эволюцию production-системы Managed Agents от монолитной архитектуры к декомпозированной. Это эталонное публичное описание паттерна.
+«We virtualized the components of an agent: a session (the append-only log of everything that happened), a harness (the loop that calls Claude and routes Claude's tool calls to the relevant infrastructure), and a sandbox (an execution environment where Claude can run code and edit files).»
+Тот же паттерн в академической литературе формулируется через AIOS (Mei et al., COLM 2025) как разделение application layer, LLM kernel и sandbox layer.
+Три компонента
+¶
+flowchart TB
+    subgraph CP["Control plane (trusted)"]
+        B["Brain<br/>Harness + LLMProvider + Policy"]
+        S["Session<br/>append-only event log"]
+    end
+    subgraph EP["Execution plane (untrusted, ephemeral)"]
+        H["Hands<br/>Sandbox + Tools + Workspace"]
+    end
+    B -->|"execute(name, input)"| H
+    H -->|"result | error"| B
+    B -->|"emitEvent(session_id, event)"| S
+    S -->|"getEvents(session_id)"| B
+    CP -.->|"wake(session_id)"| B
+Brain
+¶
+Состав:
+Harness
+(
+src/agenticos/brain/harness.py
+) — stateless event loop. Метод
+handle_user_message(session_id, content)
+выполняет один turn;
+wake(session_id)
+восстанавливает контекст из event log.
+LLMProvider
+Protocol
+(
+src/agenticos/brain/llm.py
+) — абстракция модели. Реализации:
+OpenRouterProvider
+(default — ADR-0007),
+AnthropicProvider
+(text-only — ADR-0005),
+MockLLMProvider
+(testing, расположен в
+agenticos.testing
+).
+reduce_events_to_messages
+(
+src/agenticos/brain/reduce.py
+) — свёртка event log в список
+Message
+для LLM. Включает labeled untrusted wrapping (ADR-0076).
+PolicyEngine
+— фильтрация tool calls до dispatch. Семантика deny-by-default, first-match-wins.
+Hands
+¶
+Состав:
+ToolManager
+(
+src/agenticos/hands/manager.py
+) — registry и dispatcher. Per-turn binding через
+contextvars
+(ADR-0100).
+SandboxBackend
+Protocol
+— абстракция изоляции. Реализации:
+InProcessBackend
+(dev, без изоляции; расположен в
+agenticos.testing
+),
+SubprocessBackend
+(ADR-0033),
+PooledSubprocessBackend
+(ADR-0042),
+GVisorBackend
+(ADR-0036),
+PooledGVisorBackend
+(ADR-0045).
+WorkspacePath
+и
+WorkspaceContext
+(
+src/agenticos/hands/workspace.py
+) — boundary enforcement. Любой путь, разрешённый через
+workspace.resolve(...)
+, обязан лежать внутри
+workspace_root
+; иначе выбрасывается
+WorkspaceBoundaryError
+.
+Session
+¶
+Состав:
+SessionStore
+Protocol
+(
+src/agenticos/session/store.py
+) — append-only журнал. Реализации:
+SQLiteSessionStore
+(dev),
+PostgresSessionStore
+(production — ADR-0032).
+Events
+— discriminated union из 28+ типов:
+message.user
+,
+model.called
+,
+model.responded
+,
+tool.called
+,
+tool.responded
+,
+policy.denied
+,
+budget.exceeded
+,
+replay.started
+,
+memory.archived
+и других. Полный перечень —
+Event таксономия
+.
+Идемпотентность
+emit_event
+— повторный вызов с тем же
+event_id
+возвращает существующий sequence, не дублирует запись. Проверяется контракт-тестом.
+API-контракт
+¶
+Минимальное API из
+agenticOS.md
+§3.2 и
+docs/architecture/00-overview.md
+§3:
+Метод
+Сигнатура
+Кто вызывает
+Назначение
+execute(name, input)
+→ string | error
+Brain → Hands
+Универсальный tool dispatch
+provision({resources})
+→ environment
+Brain → Control plane
+Provisioning нового sandbox по рецепту
+wake(session_id)
+→ harness
+Control plane
+Восстановление упавшего harness
+getSession(id)
+→ Event[]
+Brain → Session
+Полный журнал
+emitEvent(id, event)
+(append)
+Brain → Session
+Запись события
+getEvents(id, from?)
+→ Event[]
+Brain → Session
+Срез журнала для rehydration
+Реализация в AgenticOS:
+from
+agenticos
+import
+Harness
+,
+SessionStore
+,
+ToolManager
+# Brain → Session
+async
+for
+event
+in
+store
+.
+get_events
+(
+session_id
+):
+...
+await
+store
+.
+emit_event
+(
+session_id
+,
+ev
+)
+# Brain → Hands (внутри Harness loop)
+async
+with
+tool_manager
+.
+bind
+(
+workspace
+=...
+,
+agent_id
+=...
+,
+session_id
+=...
+):
+result
+=
+await
+tool_manager
+.
+dispatch
+(
+tool_call
+)
+# Control plane → Brain
+new_harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+tools
+=
+tools
+)
+# wake() неявно через handle_user_message: harness читает event log
+Мотивация декомпозиции
+¶
+Три причины, по которым coupled-архитектура неприемлема в production.
+Blast radius.
+Если harness работает в одном процессе с tools, успешная prompt injection в LLM получает доступ к credentials, доступным процессу. Anthropic документирует исходную проблему: «In the coupled design, any untrusted code that Claude generated was run in the same container as credentials — so a prompt injection only had to convince Claude to read its own environment.» В AgenticOS Brain (Harness + LLMProvider) изолирован в trusted-плоскости; Hands (SandboxBackend) выполняет tools в отдельном процессе через
+SubprocessBackend
+или в kernel-level контейнере через
+GVisorBackend
+. Credentials живут в vault parent-процесса; mitmproxy sidecar (ADR-0040) инжектирует их на TLS-границе.
+Cold start.
+В монолитной архитектуре каждая сессия требует provisioning'а полного контейнера с harness'ом до начала инференса. Anthropic измерил эффект декомпозиции: «p50 TTFT dropped roughly 60% and p95 dropped over 90%». В AgenticOS Harness — stateless Python-класс; cold start составляет миллисекунды на новой Postgres-сессии. Hands могут использовать
+PooledSubprocessBackend
+или
+PooledGVisorBackend
+(ADR-0042, 0045) для амортизации cold start'а sandbox'а.
+Hands portability.
+Декомпозированный brain работает с произвольным множеством hands одновременно: sandbox для кода, MCP-сервер для Slack, browser-агент для веба. Anthropic: «The harness doesn't know whether the sandbox is a container, a phone, or a Pokémon emulator.» В AgenticOS
+ToolManager
+агрегирует local Python executors, HTTP-based sidecars (Gotenberg, Docgen), Telegram driver, BitGN ECOM adapter в едином dispatch-интерфейсе.
+Аналогия с Kubernetes
+¶
+Архитектурно паттерн зеркалирует разделение control plane / data plane в Kubernetes.
+Аспект
+Kubernetes
+AgenticOS
+Что управляет
+API server, scheduler, controller manager, etcd
+Harness, ToolManager, PolicyEngine, SessionStore, Vault
+Где живёт
+Trusted control plane
+Trusted control plane
+Stateless?
+API server stateless; etcd stateful
+Harness stateless; SessionStore stateful (Postgres)
+Что исполняет
+kubelet + container runtime
+SubprocessBackend / GVisorBackend
+Коммуникация
+gRPC + watch streams
+tool dispatch + event emit
+Семантика сбоя
+Container fails → pod restart
+Sandbox fails → tool error → brain retries
+LangGraph Platform применяет тот же паттерн: «The control plane is the part of LangSmith that manages deployments. The data plane "listener" application polls for these updates by calling the control plane APIs. The control plane never connects to the data plane directly.»
+Wake-семантика
+¶
+Метод
+wake(session_id)
+определяет семантику восстановления harness'а после сбоя. Состояние не хранится в
+self
+. Контекст сессии восстанавливается из:
+Event log (
+SessionStore.get_events(session_id)
+).
+Memory (
+MemoryStore
+через
+MemoryManager
+, привязанная к
+agent_id
+).
+Agent record (
+SessionStore.get_agent(agent_id)
+).
+Следствие: процесс с harness'ом может быть прерван в середине turn'а, новый процесс восстановит контекст и продолжит с точки прерывания. Идемпотентность
+emit_event
+гарантирует, что повторная эмиссия события с тем же
+event_id
+при failover не создаёт дубликата.
+# До сбоя
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+tools
+=
+tools
+)
+await
+harness
+.
+handle_user_message
+(
+session_id
+,
+"..."
+)
+# прерывание
+# После рестарта процесса
+new_harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+tools
+=
+tools
+)
+# Вызов handle_user_message восстанавливает контекст через reduce_events_to_messages
+В AgenticOS
+wake()
+реализуется как конструктор нового
+Harness
+плюс
+reduce_events_to_messages
+над журналом. Stateless by construction.
+Запреты инварианта
+¶
+Из
+CLAUDE.md
+:
+Слияние Brain и Hands запрещено. Прямой вызов
+llm.call()
+из tool executor — нарушение.
+Отсрочка декомпозиции («потом разделим») запрещена. Brain/Hands/Session разделяются с первой строки кода. Проверяется import-linter: модуль
+agenticos.brain.harness
+не имеет права транзитивно импортировать SDK поставщиков LLM (anthropic, openai); они изолированы в
+agenticos.brain.providers
+.
+Хранение per-session state в
+self
+Harness'а запрещено. Состояние — в SessionStore или MemoryStore.
+Прямое чтение credentials в Hands запрещено. Проверяется import-linter и runtime контракт-тестом.
+Гарантии инварианта
+¶
+Сбой одного компонента не уничтожает остальные. Brain restart — harness читает event log. Hands restart — sandbox provisioning заново. SessionStore replication — Postgres failover.
+Кратный fan-out. Один Brain одновременно обращается к N sandbox'ам через delegate tool (ADR-0052), каждый с собственным workspace и identity.
+Replay-готовность. Любой completed event log воспроизводится через
+replay_session(source_id, new_model_id=...)
+с другой моделью или системным промптом (ADR-0016).
+Security boundary на уровне процесса. Prompt injection в Hands не достигает credentials в Brain.
+Дальше
+¶
+Labeled untrusted (ADR-0076)
+— защита Brain от injection в Hands output.
+Thin harness (ADR-0083)
+— почему explicit planning DAG не строится поверх контракта.
+Архитектура → Control plane
+— детальная спецификация Brain и Session.
+Архитектура → Execution plane
+— детальная спецификация Hands.

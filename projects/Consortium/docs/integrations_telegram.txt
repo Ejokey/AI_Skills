@@ -1,0 +1,342 @@
+Telegram super-agent
+¶
+aiogram 3.x driver. ADR-0061 (Phase A base) + ADR-0062 (managed bots) + ADR-0063 (bot-to-bot guards) + ADR-0064 (TG super-agent capability uplift) + ADR-0099 (sendMessageDraft live activity) + ADR-0100 (multi-chat concurrency).
+Руководство пользователя
+Эта страница — про wiring и деплой. Как пользоваться ботом (команды, медиа,
+подтверждения, сотрудники) — в разделе
+Telegram-бот
+.
+Установка
+¶
+pip
+install
+-e
+".[telegram]"
+# aiogram 3.28+ + pydantic-extra-types
+Production driver
+¶
+Полный wiring —
+scripts/run_telegram_bot.py
+.
+from
+agenticos.telegram
+import
+(
+TelegramClient
+,
+BotMessageGuard
+,
+GuardConfig
+,
+is_multi_tenant_mode
+,
+validate_multi_tenant_safety
+,
+)
+# ... wiring через aiogram Dispatcher
+Per-chat persistent workspace (ADR-0064)
+¶
+import
+os
+from
+pathlib
+import
+Path
+ROOT
+=
+Path
+(
+os
+.
+environ
+[
+"AGENTICOS_TG_WORKSPACE_ROOT"
+])
+# /var/lib/agenticos
+def
+workspace_for_chat
+(
+chat_id
+:
+int
+)
+->
+Path
+:
+p
+=
+ROOT
+/
+f
+"chat_
+{
+chat_id
+}
+"
+p
+.
+mkdir
+(
+parents
+=
+True
+,
+exist_ok
+=
+True
+)
+return
+p
+# В handler:
+workspace
+=
+workspace_for_chat
+(
+message
+.
+chat
+.
+id
+)
+harness
+=
+Harness
+(
+...
+,
+tools
+=
+tools
+,
+workspace
+=
+WorkspacePath
+(
+workspace
+))
+Workspace переживает рестарт контейнера.
+Multi-tenant safety (ADR-0087)
+¶
+export
+AGENTICOS_TG_MULTI_TENANT
+=
+1
+При
+AGENTICOS_TG_MULTI_TENANT=1
+:
+bash
+и
+python_exec
+tools отказываются регистрироваться на
+InProcessBackend
+(fail-loud).
+Требуется
+SubprocessBackend
+или
+GVisorBackend
+.
+from
+agenticos.telegram
+import
+validate_multi_tenant_safety
+validate_multi_tenant_safety
+(
+tools
+)
+# поднимает exception при unsafe конфигурации
+Live activity (ADR-0099)
+¶
+LiveActivityStreamer
+отображает progress в Telegram через
+sendMessageDraft
+(Bot API 9.5, март 2026):
+from
+agenticos.telegram.live_activity
+import
+LiveActivityStreamer
+streamer
+=
+LiveActivityStreamer
+(
+bot
+=
+bot
+,
+store
+=
+session_store
+,
+# BroadcastSessionStore с subscribers
+chat_id
+=
+chat
+.
+id
+,
+)
+async
+with
+streamer
+.
+run
+():
+response
+=
+await
+harness
+.
+handle_user_message
+(
+session_id
+,
+text
+)
+await
+bot
+.
+send_message
+(
+chat
+.
+id
+,
+response
+.
+content
+)
+Initial empty drafft при входе → typing dots в чате. Каждое
+tool.called
+,
+delegate.started
+,
+model.chunk
+event приводит к
+bot.send_message_draft(...)
+с throttle 80 ms. На exit — task cancel и
+asyncio.wait_for(2.0)
+. Методы
+send_message
+,
+edit_message_text
+,
+delete_message
+не используются (приводили к production hang до ADR-0099).
+Multi-chat concurrency (ADR-0100)
+¶
+После ADR-0100
+ToolManager
+использует per-turn binding через
+contextvars
+. Global
+bind_lock
+удалён. Concurrent Harness'ы в разных asyncio Task'ах (разные чаты на одном singleton
+ToolManager
+) работают параллельно без сериализации.
+Managed bots (ADR-0062)
+¶
+Lifecycle для child bots через BotFather:
+from
+agenticos.telegram.managed_bots
+import
+ManagedBotRegistry
+,
+ManagedBotRecord
+registry
+=
+ManagedBotRegistry
+(
+store
+=...
+)
+record
+=
+ManagedBotRecord
+(
+bot_id
+=
+"..."
+,
+bot_token
+=
+"..."
+,
+parent_user_id
+=
+"..."
+,
+)
+await
+registry
+.
+register
+(
+record
+)
+E2E validation требует BotFather user-confirmation tap (manual smoke —
+docs/manual-smokes/managed-bots.md
+).
+Bot-to-bot guards (ADR-0063)
+¶
+BotMessageGuard
+предотвращает loop'ы между bot-of-bot ботами:
+from
+agenticos.telegram.loop_guards
+import
+BotMessageGuard
+,
+GuardConfig
+guard
+=
+BotMessageGuard
+(
+config
+=
+GuardConfig
+(
+max_chain_depth
+=
+3
+,
+cooldown_per_chat_seconds
+=
+2.0
+,
+))
+# В handler:
+result
+=
+guard
+.
+check
+(
+chat_id
+,
+message_from_bot
+)
+if
+result
+.
+allow
+is
+False
+:
+return
+Webhook transport (ADR-0097)
+¶
+export
+AGENTICOS_TG_TRANSPORT
+=
+webhook
+aiogram
+SimpleRequestHandler
++ aiohttp app. Multi-region deployment: каждый pod обрабатывает webhook independently.
+Дальше
+¶
+ADR-0064
+.
+ADR-0099
+.
+ADR-0100
+— multi-chat concurrency через contextvars.
+docs/manual-smokes/managed-bots.md
+.

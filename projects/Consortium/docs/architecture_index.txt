@@ -1,0 +1,340 @@
+Архитектура
+¶
+Раздел переводит
+философские аксиомы
+в конкретные подсистемы, контракты и Protocol-абстракции. Философия отвечает на вопрос «зачем», архитектура — на вопрос «как».
+Слоистая модель
+¶
+flowchart TB
+    APP["Application layer<br/>user code · Telegram driver · HTTP API · SDK consumer"]
+    subgraph KL["Kernel layer · Control plane (trusted)"]
+        LK["LLM kernel<br/>Scheduler · Context Manager · Memory Manager ·<br/>Storage Manager · Tool Manager · Access Manager"]
+        PS["Platform services<br/>Session Store · SecretsVault · PolicyEngine ·<br/>OTel Tracer · EgressProxy · Identity"]
+    end
+    EP["Execution plane · Hands (untrusted, ephemeral)<br/>Sandboxes: InProcess / Subprocess / GVisor / Pooled<br/>Tools · Workspace FS · Egress Proxy"]
+    HOST["Hardware layer<br/>Host Linux kernel · KVM · Postgres · mitmproxy"]
+    APP --> KL
+    KL --> EP
+    EP --> HOST
+Источник:
+docs/architecture/00-overview.md
+§2.
+Шесть подсистемных страниц
+¶
+Control plane (Brain + Session)
+Harness loop, LLMProvider abstraction, event-sourced SessionStore, reduce-pass, wake-семантика, pass-through reasoning_effort и max_tokens, опциональный PEV middleware.
+ADR-0004, 0005, 0007, 0032, 0083, 0100
+Execution plane (Hands)
+ToolManager с per-turn binding через contextvars, четыре sandbox-tier'а, WorkspacePath boundary enforcement, NDJSON event streaming из worker'ов, vault pre-injection.
+ADR-0009, 0024, 0033, 0036, 0042, 0045, 0094, 0095, 0100
+Memory — three-tier
+Core blocks в system prompt, archival с гибридным retrieval (BM25 + pgvector cosine, RRF fusion), cross-session recall. Multimodal embeddings через Gemini gemini-embedding-2. Identity-bound через agent_id. Sleep-time consolidation.
+ADR-0010, 0011, 0034, 0035, 0058, 0074, 0093
+Identity & Policy
+Principal (user / agent / service), DelegationChain (RFC 8693 JWT, multi-hop), JTI revocation, PolicyEngine с deny-by-default и first-match-wins, plan-only mode, destructive flag, vault backends.
+ADR-0012, 0013, 0027, 0030, 0041, 0051, 0088, 0091
+Observability & Replay
+OpenTelemetry + OpenInference attribute set, Langfuse self-hosted, replay_session с model swap, CostGuard per-session USD и cumulative cross-session, Pass^k methodology.
+ADR-0014, 0015, 0016, 0017, 0022, 0090, 0092
+Event таксономия
+28+ типов событий в discriminated union: session, message, model, tool, policy, budget, replay, memory, auth, egress, quarantine. Append-only, идемпотентность по event_id.
+ADR-0004
+Семь AIOS-модулей и реализация в AgenticOS
+¶
+7-модульная опись AIOS (Mei et al., COLM 2025) маппится на конкретные классы:
+AIOS-модуль
+Реализация в AgenticOS
+Расположение
+Agent Scheduler
+Очередь FIFO в
+BroadcastSessionStore
++
+PubSubBroker
+(Redis / InMemory) для cross-pod fanout
+agenticos.session.broker
+Context Manager
+reduce_events_to_messages
+, wake-семантика, labeled untrusted wrapping
+agenticos.brain.reduce
+Memory Manager
+MemoryManager
+Protocol, core blocks API (≤8K char/block, ≤16K total per agent)
+agenticos.memory.manager
+Storage Manager
+SessionStore
+Protocol,
+SQLiteSessionStore
+/
+PostgresSessionStore
+agenticos.session.*
+Tool Manager
+ToolManager
+с contextvars binding (ADR-0100), 31 встроенный tool
+agenticos.hands.manager
+Access Manager
+PolicyEngine
+,
+Principal
+,
+DelegationChain
+JWT
+agenticos.policy.*
+,
+agenticos.identity.*
+LLM System Call Interface
+Top-level
+agenticos
+(124 имени) и абстрактные Protocols
+agenticos.__init__
+Главные контракты
+¶
+AgenticOS строится как набор Protocol-абстракций плюс concrete-реализации для каждой. Это обеспечивает portable swap'ы: SQLite → Postgres, in-process → gVisor, in-memory vault → HashiCorp.
+Protocol
+Назначение
+Реализации
+LLMProvider
+Принять model_id и messages, вернуть
+ModelResponse
+OpenRouterProvider
+,
+AnthropicProvider
+,
+MockLLMProvider
+SessionStore
+Append-only event log и agent registry
+SQLiteSessionStore
+,
+PostgresSessionStore
+MemoryStore
+Core blocks, archival entries, retrieval
+SQLiteMemoryStore
+,
+PostgresMemoryStore
+EmbeddingProvider
+Векторы для archival retrieval
+GoogleEmbeddingProvider
+,
+MockEmbeddingProvider
+RecallStore
+Cross-session message history search
+SQLiteRecallStore
+,
+InMemoryRecallStore
+SecretsVault
+Per-host credential lookup для egress proxy
+InMemoryVault
+,
+KeyringVault
+,
+EnvVault
+,
+HashiCorpVault
+SandboxBackend
+Запуск tool в изолированной среде
+InProcessBackend
+,
+SubprocessBackend
+,
+GVisorBackend
+, Pooled варианты
+PolicyBackend
+Allow/deny tool call
+PolicyEngine
+(built-in DSL)
+JtiRevocationStore
+JWT revocation для kill-switch
+SQLiteJtiStore
+,
+InMemoryJtiStore
+CumulativeBudgetStore
+Cross-session budget tracking
+SQLiteCumulativeBudgetStore
+,
+InMemoryCumulativeBudgetStore
+EmailAccountStore
+SMTP/IMAP account config
+KeyringEmailAccountStore
+,
+InMemoryEmailAccountStore
+PubSubBroker
+Cross-pod event fanout
+RedisPubSubBroker
+,
+InMemoryPubSubBroker
+Контракт Brain / Hands / Session в коде
+¶
+Мотивация описана в
+философии
+. Конкретные сигнатуры:
+# Brain → Session
+await
+store
+.
+emit_event
+(
+session_id
+,
+event
+)
+async
+for
+event
+in
+store
+.
+get_events
+(
+session_id
+):
+...
+# Brain → Hands
+async
+with
+tool_manager
+.
+bind
+(
+workspace
+=
+workspace
+,
+agent_id
+=
+agent
+.
+agent_id
+,
+session_id
+=
+session_id
+,
+memory
+=
+memory_manager
+,
+principal
+=
+principal
+,
+delegation
+=
+delegation_chain
+,
+policy
+=
+policy_engine
+,
+plan_only
+=
+False
+,
+):
+result
+=
+await
+tool_manager
+.
+dispatch
+(
+tool_call
+)
+# Control plane → Brain
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+tools
+=
+tools
+,
+memory
+=
+memory
+,
+...
+)
+response
+=
+await
+harness
+.
+handle_user_message
+(
+session_id
+,
+"user content"
+)
+# wake() семантика — Harness stateless, восстанавливается через event log
+Дерево модулей
+¶
+src/agenticos/
+├── __init__.py              # top-level API (124 имени) — ADR-0084
+├── settings.py              # pydantic-settings BaseSettings
+├── brain/
+│   ├── harness.py           # Harness — stateless event loop
+│   ├── llm.py               # LLMProvider Protocol + error hierarchy
+│   ├── reduce.py            # reduce_events_to_messages + labeled untrusted
+│   ├── providers/           # OpenRouter / Anthropic / Mock
+│   └── pev/                 # Plan-Execute-Verify middleware (опционально)
+├── session/
+│   ├── store.py             # SessionStore Protocol
+│   ├── sqlite_store.py      # SQLiteSessionStore
+│   ├── postgres_store.py    # PostgresSessionStore + RLS
+│   ├── broadcast.py         # BroadcastSessionStore (subscribers)
+│   └── broker.py            # PubSubBroker (Redis / InMemory)
+├── hands/
+│   ├── manager.py           # ToolManager (contextvars binding, ADR-0100)
+│   ├── workspace.py         # WorkspacePath + WorkspaceContext
+│   ├── backends/            # InProcess / Subprocess / GVisor + Pooled
+│   ├── tools/               # 31 встроенный tool
+│   ├── proxy/               # EgressProxy + mitmproxy sidecar
+│   └── workers/             # NDJSON event streaming, vault pre-injection
+├── memory/
+│   ├── store.py             # MemoryStore Protocol
+│   ├── sqlite_store.py      # SQLiteMemoryStore + FTS5
+│   ├── postgres_store.py    # PostgresMemoryStore + pgvector
+│   ├── embedding.py         # EmbeddingProvider + Google + Mock
+│   ├── manager.py           # MemoryManager
+│   ├── recall.py            # RecallStore (cross-session)
+│   └── sleep_time/          # Offline consolidation
+├── identity/
+│   ├── jwt_tokens.py        # encode / decode delegation tokens
+│   ├── vault.py             # SecretsVault Protocol + InMemoryVault
+│   ├── vault_backends/      # Keyring / Env / HashiCorp
+│   ├── revocation.py        # JtiRevocationStore (kill-switch)
+│   └── email_account_store.py
+├── policy/
+│   ├── engine.py            # PolicyEngine (deny-by-default + first-match-wins)
+│   ├── backend.py           # PolicyBackend Protocol
+│   └── presets.py
+├── costguard/
+│   ├── guard.py             # CostGuard (per-session)
+│   └── cumulative.py        # CumulativeCostGuard + Store
+├── observability/
+│   ├── tracing.py           # setup_tracer / setup_langfuse_tracer
+│   └── attributes.py        # OTel + OpenInference + AgenticOS-specific
+├── replay/
+│   └── replay.py            # replay_session(source_id, new_model_id=?)
+├── quarantine/
+│   └── llm.py               # QuarantinedLLM (opt-in CaMeL)
+├── contracts/               # Pydantic типы (Agent, Session, Message, Tool, ...)
+├── multiagent/              # delegate / submit_result / AgentSpec
+├── evals/                   # Native runner + Inspect AI / Promptfoo / OdysseyBench / BitGN
+├── api/                     # FastAPI REST + SSE control plane
+├── client/                  # AsyncAgenticOSClient + retry / circuit-breaker
+├── telegram/                # aiogram driver + multi-tenant guards
+├── testing/                 # Mock LLM / Embedding / Vault / InProcess backend
+└── migrations/              # SQLite → Postgres
+Дальше
+¶
+Каждая страница раздела — детальная спецификация одной подсистемы. Для практического использования —
+Учебник
+.

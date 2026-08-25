@@ -1,0 +1,150 @@
+Multimodal — multimodal_read и voice_synthesize
+¶
+См. также
+Учебник → 09 · Multimodal
+.
+multimodal_read (ADR-0075)
+¶
+Unified понимание файла через Gemini. Supersedes ADR-0071 (image_read).
+from
+agenticos.hands.tools
+import
+register_multimodal_read
+count
+=
+register_multimodal_read
+(
+tool_manager
+=
+tools
+,
+multimodal_caller
+=
+multimodal_caller
+,
+)
+Поддерживаемые форматы:
+Изображения:
+PNG, JPEG, WebP, HEIC, HEIF, AVIF.
+Аудио:
+WAV, MP3, AAC, FLAC, OGG, OPUS.
+Видео:
+MP4, MOV (с extract frames).
+PDF.
+Input:
+{
+"path"
+:
+"attachments/photo.jpg"
+,
+"question"
+:
+"Опиши изображение."
+}
+Output — trust level
+untrusted
+:
+{
+"text"
+:
+"This is a box of wax crayons. Brand 'Kalyaka-Malyaka'. 8 colors, ages 3+."
+,
+"tokens_used"
+:
+1234
+,
+"mime_type"
+:
+"image/jpeg"
+}
+HEIC / AVIF support (TD-055)
+¶
+pip
+install
+-e
+".[vision]"
+# Pillow + pillow-heif + pillow-avif-plugin
+Native форматы Gemini — JPEG, PNG, WebP. HEIC, HEIF, AVIF транскодируются в PNG через Pillow + plugins до отправки.
+voice_synthesize (ADR-0077)
+¶
+Text → OGG-Opus audio через ElevenLabs. Destructive (генерирует shareable artifact).
+from
+agenticos.hands.tools
+import
+register_voice_synthesize
+register_voice_synthesize
+(
+tool_manager
+=
+tools
+,
+api_key
+=
+settings
+.
+elevenlabs_api_key
+,
+cost_guard
+=
+cost_guard
+,
+# TTS USD регистрируется в budget (TD-022)
+)
+Input:
+{
+"text"
+:
+"Привет, мир!"
+,
+"voice_id"
+:
+"21m00Tcm4TlvDq8ikWAM"
+,
+"output_path"
+:
+"voice/greeting.ogg"
+,
+"stability"
+:
+0.5
+,
+"similarity_boost"
+:
+0.75
+}
+Output — trust level
+trusted
+:
+{
+"output_path"
+:
+"voice/greeting.ogg"
+,
+"duration_seconds"
+:
+1.2
+,
+"bytes"
+:
+12345
+,
+"voice_id"
+:
+"21m00..."
+}
+USD tracking
+¶
+cost_guard.record_aux_usd(amount=tts_cost, source="voice")
+регистрирует расход в
+max_usd
+budget (TD-022).
+Дальше
+¶
+Учебник → 09 · Multimodal
+.
+Философия → Labeled untrusted
+— обоснование untrusted output для multimodal_read.
+ADR-0075
+.
+ADR-0077
+.

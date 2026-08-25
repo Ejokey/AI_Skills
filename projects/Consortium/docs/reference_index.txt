@@ -1,0 +1,19 @@
+Reference
+¶
+Полный публичный API surface, env vars, перечень 101 ADR, глоссарий.
+Public API
+124 имени из top-level
+agenticos.__all__
+, сгруппированные по подсистемам: brain, contracts, costguard, hands, identity, memory, observability, policy, replay, session, quarantine.
+ADR-0084
+Settings & ENV
+Env vars, читаемые
+Settings
+и production driver'ами. Defaults для KeyringVault prefix, OpenRouter base URL, Langfuse host.
+pydantic-settings
+ADR индекс
+101 принятый ADR с заголовками и категоризацией. Прямые ссылки на полный текст в репозитории.
+101 ADR
+Глоссарий
+Brain, Hands, Session, Principal, DelegationChain, WorkspaceContext, TrustLevel, P-LLM, Q-LLM, CaMeL, labeled untrusted, plan-only — около 40 терминов.
+~40 терминов

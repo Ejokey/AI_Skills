@@ -1,0 +1,465 @@
+01 · Hello, Harness
+¶
+Минимальный AgenticOS harness без API-ключей. In-memory SQLite +
+MockLLMProvider
+. Демонстрирует архитектурный паттерн Brain / Hands / Session и event log.
+Состав примера
+¶
+Пять компонентов:
+SQLiteSessionStore
+— append-only event log.
+Agent
+— носитель идентичности (UUID), к которому привязаны сессии и память.
+MockLLMProvider
+— реализация
+LLMProvider
+Protocol с заготовленными ответами.
+Harness
+— stateless event loop.
+Event log как source of truth.
+sequenceDiagram
+    actor User
+    participant H as Harness
+    participant L as MockLLMProvider
+    participant S as SQLiteSessionStore
+
+    User->>H: handle_user_message("Привет!")
+    H->>S: emit message.user
+    H->>S: emit model.called
+    H->>L: call(messages, tools=[])
+    L-->>H: ModelResponse
+    H->>S: emit model.responded
+    H->>S: emit message.assistant
+    H-->>User: ModelResponse
+Код
+¶
+Файл
+hello.py
+:
+from
+__future__
+import
+annotations
+import
+asyncio
+from
+datetime
+import
+UTC
+,
+datetime
+from
+uuid
+import
+uuid4
+from
+agenticos
+import
+(
+Agent
+,
+Harness
+,
+ModelResponse
+,
+SQLiteSessionStore
+,
+TokenUsage
+,
+)
+from
+agenticos.testing
+import
+MockLLMProvider
+async
+def
+main
+()
+->
+None
+:
+store
+=
+SQLiteSessionStore
+(
+db_path
+=
+":memory:"
+)
+await
+store
+.
+init_schema
+()
+agent
+=
+Agent
+(
+agent_id
+=
+uuid4
+(),
+created_at
+=
+datetime
+.
+now
+(
+UTC
+),
+system_prompt
+=
+"Ассистент. Отвечает одним коротким предложением."
+,
+model_id
+=
+"mock-model"
+,
+)
+await
+store
+.
+register_agent
+(
+agent
+)
+session
+=
+await
+store
+.
+create_session
+(
+agent
+.
+agent_id
+,
+created_by
+=
+"quickstart"
+)
+llm
+=
+MockLLMProvider
+(
+responses
+=
+[
+ModelResponse
+(
+content
+=
+"Привет."
+,
+usage
+=
+TokenUsage
+(
+input_tokens
+=
+12
+,
+output_tokens
+=
+2
+),
+stop_reason
+=
+"end_turn"
+,
+request_id
+=
+"mock-1"
+,
+model_id
+=
+"mock-model"
+,
+),
+],
+)
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+)
+response
+=
+await
+harness
+.
+handle_user_message
+(
+session
+.
+session_id
+,
+"Привет!"
+)
+print
+(
+f
+"agent:
+{
+response
+.
+content
+}
+"
+)
+print
+(
+f
+"tokens: in=
+{
+response
+.
+usage
+.
+input_tokens
+}
+out=
+{
+response
+.
+usage
+.
+output_tokens
+}
+"
+)
+print
+(
+"
+\n
+--- event log ---"
+)
+async
+for
+ev
+in
+store
+.
+get_events
+(
+session
+.
+session_id
+):
+print
+(
+f
+"  seq=
+{
+ev
+.
+sequence
+:
+>2
+}
+type=
+{
+ev
+.
+type
+}
+"
+)
+if
+__name__
+==
+"__main__"
+:
+asyncio
+.
+run
+(
+main
+())
+Запуск:
+python
+hello
+.
+py
+Ожидаемый вывод:
+agent: Привет.
+tokens: in=12 out=2
+--- event log ---
+seq= 1  type=session.created
+seq= 2  type=message.user
+seq= 3  type=model.called
+seq= 4  type=model.responded
+seq= 5  type=message.assistant
+Разбор компонентов
+¶
+SQLiteSessionStore
+— append-only журнал (
+ADR-0004
+). Production-замена —
+PostgresSessionStore
+(
+ADR-0032
+) с идентичным контрактом. Параметр
+db_path=":memory:"
+создаёт SQLite в RAM (сессия теряется при exit); для persistence —
+db_path="agenticos.db"
+.
+Agent
+— носитель идентичности:
+agent_id
+— UUID, primary key для всего state (memory, sessions).
+system_prompt
+— инжектится в LLM context каждого turn'а наряду с core memory blocks.
+model_id
+— модель по умолчанию (overridable per call).
+created_at
+— UTC timestamp.
+MockLLMProvider
+— реализация
+LLMProvider
+Protocol. Возвращает заготовленные
+ModelResponse
+в порядке списка. Production-альтернативы:
+OpenRouterProvider
+— default для tool-using deployments (ADR-0007).
+AnthropicProvider
+— direct API, text-only (ADR-0005, 0084): попытка передать tools поднимает
+LLMPermanentError
+.
+Harness
+— stateless. Метод
+handle_user_message(session_id, content)
+выполняет последовательность:
+Verify delegation (idempotent per session, при первом turn'е).
+Emit
+message.user
+.
+Fetch core memory blocks (если
+MemoryManager
+присоединён).
+Reduce events → messages для LLM.
+Emit
+model.called
+.
+llm.call(model_id, messages, tools=...)
+.
+Emit
+model.responded
+.
+CostGuard check.
+При
+tool_calls
+— dispatch каждого с эмиссией
+tool.called
+и
+tool.responded
+/
+tool.error
+. Цикл повторяется (по умолчанию до 10 итераций).
+При отсутствии
+tool_calls
+— emit
+message.assistant
+, return.
+При перезапуске процесса новый
+Harness
+instance читает event log и продолжает с точки прерывания — wake-семантика без явного вызова
+wake()
+.
+Расширения примера
+¶
+Несколько turn'ов.
+Добавление второго ответа в
+MockLLMProvider
+:
+llm
+=
+MockLLMProvider
+(
+responses
+=
+[
+ModelResponse
+(
+content
+=
+"Привет."
+,
+...
+),
+ModelResponse
+(
+content
+=
+"Сегодня 23 мая 2026."
+,
+...
+),
+],
+)
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+)
+await
+harness
+.
+handle_user_message
+(
+session
+.
+session_id
+,
+"Привет!"
+)
+await
+harness
+.
+handle_user_message
+(
+session
+.
+session_id
+,
+"Какое число?"
+)
+# Event log содержит 8 событий — два полных turn'а.
+Persistent SQLite.
+Замена
+:memory:
+на путь к файлу: журнал переживает рестарт процесса.
+Wake recovery.
+При создании нового
+Harness
+после рестарта и вызове
+handle_user_message
+контекст автоматически восстанавливается через
+reduce_events_to_messages
+над event log.
+Дальше
+¶
+02 · Реальная модель через OpenRouter
+— замена
+MockLLMProvider
+на production provider.
+03 · Tools и workspace
+— регистрация tools и sandboxed workspace.
+Архитектура → Control plane
+— спецификация Harness и SessionStore.
+Архитектура → Event таксономия
+— 28+ типов событий.

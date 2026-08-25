@@ -1,0 +1,442 @@
+Tool reference
+¶
+31 встроенный tool в 9 категориях. Каждый tool —
+Tool
+спецификация и executor coroutine. Все следуют
+TrustLevel taxonomy (ADR-0019)
+и используют
+destructive=True
+flag для policy gate.
+Полная инвентаризация
+¶
+Core tools (5)
+¶
+Core tools
+. Регистрируются вручную через
+tools.register(TOOL, executor)
+. Не требуют extras.
+Tool
+trust_level
+destructive
+requires_isolation
+file_editor
+trusted
+да (write / delete)
+нет
+bash
+untrusted (output)
+да
+да
+http_client
+untrusted (body)
+нет
+нет
+browser
+untrusted (page)
+нет
+нет
+think
+trusted
+нет
+нет
+Memory tools (4)
+¶
+Memory tools
+. Auto-registered Harness'ом при передаче
+MemoryManager
+и
+register_memory_tools=True
+(default).
+Tool
+trust_level
+Описание
+memory_block
+trusted
+CRUD над core blocks (write / read / list / delete)
+memory_archive
+trusted
+Append archival entry
+memory_search
+trusted
+BM25 + recency × importance search
+memory_recall
+trusted
+Cross-session message history (ADR-0093)
+Extract tools (1)
+¶
+extract_from_untrusted
+. Opt-in CaMeL Q-LLM (ADR-0076 + 0018).
+Tool
+trust_level
+Описание
+extract_from_untrusted
+trusted
+Q-LLM с pydantic schema validation
+Web tools (1 интерфейс, 3 провайдера)
+¶
+Web search
+. Регистрируется с api_key.
+Provider
+trust_level
+Источник
+web_search
+(Perplexity Sonar)
+untrusted
+ADR-0072
+web_search
+(Tavily)
+untrusted
+TD-056
+web_search
+(Brave)
+untrusted
+TD-056
+Office tools (5, требуют
+[office]
+extra)
+¶
+Office
+. Auto-registered через
+register_office_tools(tools)
+.
+Tool
+trust_level
+destructive
+Описание
+pdf_read
+untrusted
+нет
+Extract text from PDF (pdfplumber + vision-LLM OCR fallback)
+docx_read
+untrusted
+нет
+Extract text / tables from .docx
+docx_write
+trusted
+да
+Create simple .docx
+xlsx_read
+trusted
+нет
+Read cells from .xlsx
+xlsx_write
+trusted
+да
+Create .xlsx from data
+Multimodal tools (2)
+¶
+Multimodal
+.
+Tool
+trust_level
+destructive
+Описание
+multimodal_read
+untrusted
+нет
+Unified file understanding via Gemini (ADR-0075)
+voice_synthesize
+trusted
+да
+Text → OGG-Opus audio via ElevenLabs (ADR-0077)
+Rendering tools (5, 2 требуют sidecars)
+¶
+Rendering
+. Pretty document generation (ADR-0068, 0069).
+Tool
+extra
+sidecar
+destructive
+chart_render
+[charts]
+в процессе
+да
+pdf_from_html
+—
+Gotenberg
+да
+pdf_from_office
+—
+Gotenberg
+да
+pdf_merge
+—
+Gotenberg
+да
+pptx_render
+—
+Docgen
+да
+docx_render_pretty
+—
+Docgen
+да
+Calendar + Email (6, требуют
+[calendar-ics]
+и
+[email]
+)
+¶
+Calendar + Email
+. ADR-0066.
+Tool
+trust_level
+destructive
+calendar_read
+untrusted
+нет
+calendar_event_add
+trusted
+да
+calendar_event_remove
+trusted
+да
+calendar_todo_add
+trusted
+да
+email_send
+trusted
+да
+email_search
+untrusted
+нет
+Python exec (1)
+¶
+python_exec
+. ADR-0073.
+Tool
+trust_level
+destructive
+requires_isolation
+python_exec
+untrusted (stdout)
+да
+да
+Общие паттерны
+¶
+Анатомия Tool
+¶
+@dataclass
+(
+frozen
+=
+True
+)
+class
+Tool
+:
+name
+:
+str
+# function name для LLM
+description
+:
+str
+# подаётся LLM как tool description
+input_schema
+:
+dict
+[
+str
+,
+Any
+]
+# JSON Schema (Draft 2020-12)
+output_schema
+:
+dict
+[
+str
+,
+Any
+]
+|
+None
+=
+None
+destructive
+:
+bool
+=
+False
+requires_isolation
+:
+bool
+=
+False
+output_trust_level
+:
+TrustLevel
+=
+"trusted"
+concurrent
+:
+bool
+=
+False
+memory_bound
+:
+bool
+=
+False
+runtime_hint
+:
+RuntimeHint
+=
+None
+Сигнатура ToolExecutor
+¶
+ToolExecutor
+=
+Callable
+[
+[
+dict
+[
+str
+,
+Any
+],
+WorkspaceContext
+],
+Awaitable
+[
+str
+],
+# JSON string (canonical)
+]
+Паттерны регистрации
+¶
+# Прямая регистрация
+tools
+.
+register
+(
+FILE_EDITOR_TOOL
+,
+file_editor_executor
+)
+tools
+.
+register
+(
+BASH_TOOL
+,
+make_bash_executor
+(
+min_scrub_bytes
+=
+8
+))
+# Bulk helpers (возвращают количество зарегистрированных tools)
+register_office_tools
+(
+tools
+)
+# 5 tools при установленном [office]
+register_chart_render
+(
+tools
+)
+# 1 tool при [charts]
+register_calendar_tools
+(
+tools
+)
+# 4 tools при [calendar-ics]
+register_email_tools
+(
+tools
+,
+account_store
+=...
+)
+register_web_search
+(
+tools
+,
+api_key
+=...
+,
+provider
+=
+"perplexity"
+)
+register_voice_synthesize
+(
+tools
+,
+api_key
+=...
+)
+register_multimodal_read
+(
+tools
+,
+multimodal_caller
+=...
+)
+register_python_exec
+(
+tools
+)
+register_gotenberg_tools
+(
+tools
+,
+base_url
+=
+os
+.
+environ
+[
+"AGENTICOS_GOTENBERG_URL"
+])
+register_docgen_tools
+(
+tools
+,
+base_url
+=
+os
+.
+environ
+[
+"AGENTICOS_DOCGEN_URL"
+])
+Проверки availability
+¶
+from
+agenticos.hands.tools
+import
+(
+office_tools_available
+,
+chart_render_available
+,
+calendar_tools_available
+,
+email_tools_available
+,
+gotenberg_available
+,
+docgen_available
+,
+)
+if
+office_tools_available
+():
+register_office_tools
+(
+tools
+)
+Trust level и reduce wrapping
+¶
+output_trust_level="untrusted"
+приводит к обёртке content в reduce.py:
+<untrusted_data tool_call_id="tc-1">
+...content...
+</untrusted_data>
+Модель обучена на уровне system prompt'а к quoting и summarising, но не treating instructions as commands. См.
+Философия → Labeled untrusted
+.

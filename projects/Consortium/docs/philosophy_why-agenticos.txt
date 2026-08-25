@@ -1,0 +1,293 @@
+Зачем agenticOS
+¶
+Этот раздел объясняет, чем agentic operating system отличается от LLM с function calling и какие архитектурные требования делают её необходимой в production. Источники — академическая работа Mei et al. (AIOS, COLM 2025), инженерные публикации Anthropic, AWS, Cloudflare, Replit за 2024–2026 годы, а также синтез исходного концептуального документа
+agenticOS.md
+в корне репозитория.
+Время чтения — около 20 минут.
+1. Три качественно разных системы
+¶
+В индустрии 2024–2026 годов под словом «агент» смешиваются три уровня сложности. Различение между ними определяет, какая инфраструктура требуется.
+Уровень 1. LLM с function calling.
+Расширенная модель (augmented LLM): сама модель плюс набор инструментов, retrieval и опционально память. Function calling — это интерфейс языкового API, не архитектура. Эквивалент: наличие системных вызовов
+open()
+и
+read()
+не делает программу операционной системой.
+Уровень 2. AI-агент.
+Добавляет цикл выполнения: план → действие → наблюдение → пересмотр плана. Anthropic в декабре 2024 определяет:
+«Agents begin their work with either a command from, or interactive discussion with, the human user. Once the task is clear, agents plan and operate independently, potentially returning to the human for further information or judgement.»
+Этот уровень требует управления контекстом, маршрутизации tool calls, обработки ошибок инструмента и условий завершения. Реализуется в 200–500 строк Python поверх любого LLM-провайдера.
+Уровень 3. AgenticOS.
+Инфраструктурный слой, на котором одновременно работают множество агентов, использующих общие ресурсы — LLM-квоты, инструменты, хранилища, сеть. Появляется набор задач, классических для операционных систем: приоритизация запросов, изоляция между сессиями, контроль доступа, аудит, восстановление после сбоев.
+Mei et al. в работе
+AIOS: LLM Agent Operating System
+(COLM 2025) формулируют это прямо:
+«AIOS isolates resources and LLM-specific services from agent applications into an AIOS kernel. This AIOS kernel provides fundamental services (e.g., scheduling, context management, memory management, storage management, access control) for runtime agents.»
+Различие между уровнями 2 и 3 критично по практическим причинам. Одиночный tool-using runtime не нуждается в scheduler'е или access manager'е. Многопользовательская среда исполнения, в которой агенты от разных пользователей делят GPU-ресурсы и обращаются к общим инструментам, без OS-подобной инфраструктуры воспроизводит проблемы UNIX 1970-х годов: ресурсный контеншн, утечки контекста между сессиями, неконтролируемое потребление ресурсов одним процессом, отсутствие аудита.
+AgenticOS адресует уровень 3. Если задача — одиночный персональный агент, для неё избыточен. LangChain, LlamaIndex, Pydantic AI закрывают второй уровень и являются адекватным выбором.
+2. Семь модулей AIOS
+¶
+Работа Mei et al. описывает канонический набор подсистем agentic OS:
+Модуль
+Назначение
+Agent Scheduler
+Приоритизирует и шедулит запросы агентов
+Context Manager
+Snapshot/restore контекста и управление context window
+Memory Manager
+Короткая память агента
+Storage Manager
+Долгосрочное хранилище
+Tool Manager
+Вызовы внешних API
+Access Manager
+Изоляция и контроль доступа между агентами
+LLM System Call Interface
+Интерфейс между агент-приложением и kernel'ом
+Семь модулей не являются академической конструкцией. Тот же набор воспроизводится в production-платформах под другими именами.
+LangGraph Platform
+(LangChain, GA в мае 2025) разделяет control plane (управление деплойментами, метаданные, наблюдение) и data plane (исполнитель). Postgres persistence реализует storage manager; checkpointing и память — memory manager; tool nodes — tool manager. Studio с возможностью time-travel — context manager в действии.
+Anthropic Claude Agent SDK
+(бывший Claude Code SDK, переименован в 2026) поставляется как библиотека, объединяющая context management с compaction, инструментальную экосистему, систему permissions и production-функции — обработку ошибок, управление сессиями, мониторинг.
+Letta
+(бывший MemGPT) реализует трёхуровневую модель памяти по аналогии с компьютерной архитектурой: Core Memory (всегда в контексте, аналог RAM), Recall Memory (история сообщений, индексированная для поиска), Archival Memory (векторное хранилище). AgenticOS использует ту же трёхуровневую модель — см.
+Memory
+.
+Если в системе одна из семи подсистем сливается с другой или отсутствует — это технический долг. Он проявляется при первом серьёзном инциденте или попытке масштабирования.
+3. Decoupling brain, hands и session
+¶
+В апреле 2026 Anthropic опубликовала статью
+Scaling Managed Agents: Decoupling the brain from the hands
+. Она документирует эволюцию production-системы Managed Agents от монолитной архитектуры к декомпозированной и является эталонным описанием паттерна.
+Исходное состояние.
+Все компоненты агента — session, harness, sandbox — помещались в один контейнер. Это упрощало разработку, но привело к двум проблемам:
+«By coupling everything into one container, we ran into an old infrastructure problem: we'd adopted a pet. (...) The server became that pet; if a container failed, the session was lost.»
+Контейнер превращался в критический stateful-узел: при сбое терялась сессия, при росте нагрузки требовалось индивидуальное обслуживание. Второй, более серьёзный аспект — безопасность:
+«In the coupled design, any untrusted code that Claude generated was run in the same container as credentials — so a prompt injection only had to convince Claude to read its own environment.»
+В одном процессе одновременно присутствовали (1) LLM, обрабатывающий пользовательский ввод и внешний контент, (2) credentials для внутренней инфраструктуры, (3) sandbox для выполнения сгенерированного кода. Одна успешная prompt injection давала атакующему доступ к токенам.
+Структурный фикс.
+Декомпозиция на три независимо виртуализируемых компонента с явными контрактами:
+Session
+— append-only журнал событий. Хранится отдельно (в случае Anthropic — Postgres). Переживает сбои brain и hands.
+Brain (Harness)
+— stateless цикл, вызывающий модель и маршрутизирующий tool calls. Восстанавливается из event log при перезапуске.
+Hands (Sandbox)
+— изолированное окружение для выполнения кода и инструментов. Эфемерное; при сбое создаётся заново.
+Контракт между компонентами:
+Метод
+Кто вызывает
+Назначение
+execute(name, input) → string
+Brain → Hands
+Универсальный tool dispatch
+provision({resources})
+Brain → Control plane
+Поднять новый sandbox
+wake(sessionId)
+Control plane
+Восстановить упавший harness
+emitEvent(id, event)
+Brain → Session
+Append в журнал
+getEvents(id, from?)
+Brain → Session
+Чтение журнала
+Anthropic характеризует результат:
+«The harness no longer lived inside the container. It called the container the way it called any other tool:
+execute(name, input) → string
+. If the container died, the harness caught the failure as a tool-call error and passed it back to Claude.»
+Измеренный эффект: «p50 TTFT dropped roughly 60% and p95 dropped over 90%».
+AgenticOS принимает данную архитектуру как фундаментальный инвариант. Brain ≠ Hands ≠ Session зафиксирован в
+CLAUDE.md
+как жёсткий инвариант №1 и проверяется import-linter'ом на структурном уровне: модуль
+agenticos.brain.harness
+не имеет права транзитивно импортировать SDK поставщиков LLM, а
+agenticos.hands.*
+не имеет права обращаться к vault напрямую.
+4. Lethal trifecta — структурная уязвимость агентов
+¶
+Помимо инфраструктурных проблем, агенты подвержены классу атак, который невозможно полностью устранить программными средствами — prompt injection. Simon Willison в июне 2025 года формализовал необходимые и достаточные условия структурной уязвимости.
+Lethal trifecta
+— три свойства, одновременное наличие которых делает агента уязвимым:
+Доступ к приватным данным.
+Воздействие недоверенного контента (документы, веб-страницы, email).
+Способность к внешней коммуникации.
+Willison:
+«There is no known reliable way to defend against this risk. As an industry we don't yet know how to robustly defend against this class of attack.»
+Причина не в качестве реализации защит, а в архитектуре transformer-моделей: LLM физически не различает «инструкции от разработчика» и «инструкции, встроенные в обрабатываемый документ». Это constraint на уровне модели.
+Документированные инциденты.
+Google Antigravity, декабрь 2025.
+В Turbo-режиме агент удалил содержимое физического диска
+D:
+пользователя в ответ на просьбу очистить кэш проекта. Случай зафиксирован в публикациях Newsweek, Tom's Hardware, TechRadar.
+GitHub MCP-сервер, ноябрь 2025.
+Атака состояла в prompt injection, размещённой в issue публичного репозитория. Пользователи, подключившие GitHub MCP к Claude или Cursor для работы с issue-трекером, провоцировали агента на чтение приватных репозиториев того же аккаунта и экспорт содержимого через pull request.
+SailPoint, May 2025.
+Опрос Dimensional Research (353 респондента) зафиксировал: 80% компаний наблюдали у своих AI-агентов незапланированные действия. Из них 39% — доступ к неавторизованным системам, 32% — загрузка чувствительных данных, 33% — распространение ограниченной информации.
+Контекст эксплуатации.
+Команда Qovery формулирует операционные последствия:
+«If your engineering team uses Claude Code, Codex, Cursor, or OpenCode, your AI agents are running with the same permissions as your developers. That means: full access to SSH keys and AWS credentials on the developer's machine; unaudited command execution; no network isolation.»
+Стандартный сценарий: разработчик запускает coding-агента на рабочей машине. Агент наследует полные права пользователя — доступ к AWS production, git-репозиториям, kubectl с правами cluster-admin. Одна prompt injection из прочитанного pull request-комментария потенциально предоставляет атакующему этот же набор прав.
+AgenticOS не претендует на устранение prompt injection как класса. Архитектурная цель — ограничить blast radius при успешной атаке. Защитные слои описаны в разделах 5–6.
+5. Изоляция: ограничения стандартных контейнеров
+¶
+Стандартный Docker-контейнер не является границей безопасности и не подходит для исполнения LLM-сгенерированного кода в production. Это утверждение требует обоснования.
+Корень проблемы — общее ядро.
+Все контейнеры на одном хосте используют единое Linux kernel. Namespaces изолируют именные пространства (PID, network, mount); cgroups ограничивают ресурсы (CPU, memory, IO). Обе технологии реализуют resource isolation, не security boundary. Уязвимость в ядре пробивает все контейнеры на хосте.
+Регулярные эксплойты в стеке.
+За три года опубликованы:
+CVE-2024-21626
+(январь 2024) — утечка файлового дескриптора в runC. Через манипуляцию рабочей директорией нового контейнера атакующий получал доступ к файловой системе хоста.
+CVE-2025-31133, CVE-2025-52565, CVE-2025-52881
+(ноябрь 2025) — race condition при bind-монтировании
+/dev/null
+и
+/dev/pts/*
+. Атакующий подменял
+/dev/null
+на симлинк до создания контейнера; runC bind-монтировал произвольный путь хоста внутрь контейнера; запись в
+/proc/sys/kernel/core_pattern
+обеспечивала escape с правами root на хосте.
+runC — базовый runtime под Docker, containerd, Kubernetes, CRI-O. Уязвимость в runC распространяется по всему стеку контейнерной оркестрации. Подобные инциденты — не разовые ошибки; CVE такого класса публикуются с регулярностью раз в 12–18 месяцев.
+Документация gVisor:
+«With standard containers, the workload is only one system call away from host compromise.»
+Это формальное определение: между процессом в контейнере и компрометацией хоста — расстояние в один системный вызов, использующий kernel exploit.
+Альтернативные технологии изоляции.
+Индустрия использует три класса решений.
+Firecracker microVM
+— virtual machine monitor от AWS, представлен на re:Invent 2018. Кодовая база ~50 000 строк Rust (для сравнения, QEMU — >1.4 млн строк C). Каждый sandbox получает собственный kernel, изолированный аппаратной виртуализацией KVM. По данным NSDI-2020 (Agache et al.):
+«With the provided minimal Linux guest kernel configuration, it offers memory overhead of less than 5MB per container, boots to application code in less than 125ms.»
+AWS Lambda и Fargate работают на Firecracker. Применяется в E2B, Vercel Sandbox, Fly.io Machines, Cloudflare Sandboxes.
+gVisor
+(runsc) — user-space kernel, написанный на Go. Перехватывает системные вызовы из контейнера и реализует их в собственном процессе, не передавая в хостовое ядро. Реализует ~78% Linux syscalls (274 из 350). Применяется в OpenAI Code Interpreter, Google Cloud Run первой генерации, App Engine, GKE Sandbox, Modal.
+V8 isolate
+— изоляция уровня JS-движка, технология, используемая для разделения вкладок Chrome. Cloudflare Workers и Dynamic Workers построены на ней:
+«An isolate takes a few milliseconds to start and uses a few megabytes of memory. That's around 100x faster and 10x–100x more memory efficient than a typical container.»
+Ограничение — поддерживается только JavaScript и WASM. Не применимо к Python-проектам.
+Выбор в AgenticOS.
+Стандартный production tier — gVisor через Docker с runtime
+runsc
+(ADR-0036). Реализован как
+GVisorBackend
+и
+PooledGVisorBackend
+с per-call worker recycle для kernel state isolation (ADR-0095). Контракт
+SandboxBackend
+спроектирован так, что добавление Firecracker backend'а не требует изменений в Brain — реализуется как новый класс под тем же Protocol.
+6. Пять обязательных принципов изоляции
+¶
+Выбор технологии изоляции — необходимое, но не достаточное условие. Внутри изолированного окружения требуется набор архитектурных принципов.
+Workspace-only mount.
+Sandbox получает доступ только к выделенному рабочему каталогу. Bind-монтирование корневой файловой системы,
+/etc
+,
+/home
+запрещено. В AgenticOS реализовано через
+WorkspacePath
+и
+WorkspaceContext
+: каждое разрешение пути через
+workspace.resolve(...)
+проверяет принадлежность результата к
+workspace_root
+; при выходе за границу выбрасывается
+WorkspaceBoundaryError
+. Проверка структурно встроена в контракт инструментов.
+Deny-by-default network.
+Исходящие сетевые соединения запрещены по умолчанию и открываются явно через allowlist. Anthropic Claude Code документирует: «Network isolation ensures that Claude can only connect to approved servers.» Cloudflare Dynamic Workers использует capability-based модель:
+globalOutbound: null
+по умолчанию означает отсутствие способности делать исходящие запросы до явного binding'а.
+В AgenticOS два слоя контроля:
+Python-уровневый allowlist в
+http_client
+(ADR-0020) — проверка host до выполнения запроса.
+Network-boundary credential injection через mitmproxy sidecar (ADR-0040, 0047) — vault физически находится в parent-процессе, не доступен из sandbox.
+Ephemeral filesystem.
+Каждая сессия использует чистую overlay-FS; артефакты, требуемые между сессиями, переносятся явно через storage manager (memory или workspace). Firecracker snapshot-restore позволяет полное состояние FS с диска за 5–30 мс.
+Scoped credentials per session.
+Sandbox никогда не имеет прямого доступа к credentials. Anthropic документирует структурный фикс:
+«The structural fix was to make sure the tokens are never reachable from the sandbox where Claude's generated code runs.»
+В AgenticOS vault находится в parent-процессе. Sandbox конфигурирован с
+HTTPS_PROXY=http://127.0.0.1:18443
+, где работает mitmproxy sidecar. На каждом исходящем запросе sidecar через TCP+JSON-RPC обращается к parent: запрашивает credentials для целевого host. Parent отвечает headers'ами; sidecar инжектирует их на TLS-границе. Sandbox не видит токенов на уровне application code. Audit event
+egress.credentials_injected
+фиксирует факт инъекции с метаданными (host, scope, vault backend), без самих токенов.
+seccomp / AppArmor profiles.
+Последний рубеж: даже при пробое контейнера seccomp ограничивает доступ к опасным syscalls. Firecracker VMM использует seccomp-bpf profile с whitelist 24 syscalls. В AgenticOS на
+GVisorBackend
+используется дефолтный seccomp-profile runsc; дополнительный tightening — открытый roadmap.
+Защита в один слой — anti-pattern. Каждый принцип закрывает отдельный класс атак; реальный production требует одновременной реализации всех пяти.
+7. Критерии production-grade
+¶
+Различие между демонстрационным и production-grade агентом формализуется через десять критериев. Каждый имеет конкретное техническое воплощение.
+Критерий
+Demo
+Production-grade
+В AgenticOS
+Reproducibility
+Установка пакетов на каждый запуск
+Snapshot-based provisioning
+PooledGVisorBackend
++ Docker image templates
+Traceability
+Ad-hoc логи
+OpenTelemetry / OpenInference spans, Langfuse backend
+Langfuse setup
+Replay
+Отсутствует
+Trace → checkpoint → replay against new model
+replay_session
+Blast-radius isolation
+Хостовое окружение
+Firecracker/gVisor + per-tenant accounts
+gVisor + multi-tenant Postgres RLS
+Secret hygiene
+.env
+в файловой системе
+Vault + scoped tokens через proxy
+mitmproxy sidecar + HashiCorp Vault
+Identity и authorization
+Shared service account
+Delegation tokens, JIT credentials, kill switch
+RFC 8693 JWT + JTI revocation
+Policy enforcement
+System prompt
+Layered guardrails (network, FS, command, tool, content)
+PolicyEngine + plan-only mode
+Cost controls
+Отсутствуют
+Rate limits, max budget, denial-of-wallet protection
+CostGuard + CumulativeCostGuard
+Failure recovery
+Перезапуск с потерей состояния
+Durable session log +
+wake(session_id)
+Postgres event log + stateless Harness
+Observability targeting
+Один лог-файл
+Structured spans с attribution per-agent / per-user / per-tool
+OpenInference attribute set
+Отсутствие более чем двух пунктов из списка указывает на demo-уровень зрелости, независимо от популярности фреймворка.
+8. Архитектурные пределы
+¶
+Изоляция, vault, policy и audit ограничивают blast radius при инциденте, но не устраняют ошибки рассуждения модели. AgenticOS — это операционная среда, в которой процесс обрабатывает естественный язык и подвержен непредсказуемому поведению на уровне модели, а не инфраструктуры.
+В архитектуре с labeled untrusted content (ADR-0076) при чтении prompt injection из документа агент не может утечь credentials (vault изолирован), не может удалить хостовый файл (workspace-only mount), не может обратиться к запрещённому host (egress allowlist). Однако он может удалить файл внутри workspace, если инструкция этого попросит, и может изменить план в ответ на injection. Эти проблемы решаются на уровне модели и prompt engineering, не инфраструктуры.
+AgenticOS реализует двухуровневую защиту:
+Архитектурная
+— описана в этом разделе и далее.
+Модельная
+— labeled untrusted content (ADR-0076), thin harness pivot (ADR-0083), reasoning_effort tuning, destructive flag и plan-only mode для гейтинга критических операций.
+Ни один уровень самостоятельно не является достаточным. Комбинация двух обеспечивает production-приемлемый уровень безопасности для большинства сценариев и соответствует канонической практике Anthropic, OpenAI, Google в 2026 году.
+Дальше
+¶
+Brain / Hands / Session
+— детальный разбор главного архитектурного инварианта.
+Labeled untrusted content (ADR-0076)
+— текущий канонический ответ на prompt injection.
+Thin harness (ADR-0083)
+— frontier alignment и решение против explicit planning DAG.
+ADR-first дисциплина
+— методология документирования архитектурных решений.
+Для практической работы —
+Быстрый старт
+.

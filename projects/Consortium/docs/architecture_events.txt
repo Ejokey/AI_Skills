@@ -1,0 +1,481 @@
+Event таксономия
+¶
+28+ типов событий. Discriminated union. Append-only хранение. Идемпотентность по
+event_id
+. Каждое событие представлено как
+EventEnvelope
+с полями
+event_id
+,
+session_id
+,
+sequence
+,
+created_at
+,
+payload
+.
+Полная таблица событий
+¶
+session.*
+¶
+Type
+Когда эмитится
+Payload
+session.created
+Создание сессии (
+store.create_session
+)
+principal_subject
+(опционально),
+delegation_purpose
+(опционально),
+created_by
+session.error
+Recoverable / non-recoverable error
+reason
+,
+recoverable: bool
+message.*
+¶
+Type
+Когда эмитится
+Payload
+message.user
+Harness получает user msg
+content
+message.assistant
+Harness эмитит финальный ответ
+content
+,
+stop_reason
+model.*
+¶
+Type
+Когда эмитится
+Payload
+model.called
+Перед LLM call
+model_id
+,
+request_id
+, количество tools
+model.responded
+После LLM response
+model_id
+,
+response_id
+,
+usage
+(
+TokenUsage
+),
+stop_reason
+,
+content
+,
+tool_calls
+model.chunk
+(TD-045)
+При
+stream_llm_responses=True
+— каждая delta
+delta
+,
+usage
+(partial),
+finished
+tool.*
+¶
+Type
+Когда эмитится
+Payload
+tool.called
+Перед dispatch (после policy allow)
+tool_call_id
+,
+tool_name
+,
+arguments
+(JSON),
+destructive
+tool.responded
+После успешного dispatch
+tool_call_id
+,
+tool_name
+,
+content
+,
+trust_level
+tool.error
+Tool поднял exception
+tool_call_id
+,
+tool_name
+,
+error_message
+policy.*
+¶
+Type
+Когда эмитится
+Payload
+policy.denied
+Policy gate denied tool call
+tool_name
+,
+matched_rule
+,
+reason
+auth.*
+¶
+Type
+Когда эмитится
+Payload
+auth.delegation_verified
+Per session — первый turn проверяет JWT
+subject
+,
+act_on_behalf_of
+,
+scopes
+,
+jti
+,
+expires_at
+budget.*
+¶
+Type
+Когда эмитится
+Payload
+budget.exceeded
+Per-session CostGuard превышен
+kind
+(
+input
+/
+output
+/
+total
+/
+usd
+),
+limit
+,
+actual
+budget.cumulative_exceeded
+Cross-session cumulative limit (ADR-0090)
+window
+(
+agent
+/
+enduser
+),
+period_start
+,
+period_end
+,
+limit
+,
+actual
+replay.*
+¶
+Type
+Когда эмитится
+Payload
+replay.started
+Начало replay (в новой сессии)
+source_session_id
+,
+new_model_id
+replay.completed
+Конец replay (в новой сессии)
+error_message
+(опционально, при failure)
+memory.*
+¶
+Type
+Когда эмитится
+Payload
+memory.block_written
+memory_block(op="write")
+block_name
+,
+agent_id
+,
+content_length
+memory.block_deleted
+memory_block(op="delete")
+block_name
+,
+agent_id
+memory.archived
+memory_archive
+entry_id
+,
+category
+,
+importance
+memory.searched
+memory_search
+или
+memory_recall
+query
+,
+total_candidates
+,
+hits_returned
+egress.*
+¶
+Type
+Когда эмитится
+Payload
+egress.credentials_injected
+EgressProxy инжектил credentials
+host
+,
+scope_used
+,
+vault_backend
+,
+credential_metadata
+egress.denied
+EgressProxy отказал (host вне allowlist)
+host
+,
+tool_name
+quarantine.*
+¶
+Type
+Когда эмитится
+Payload
+quarantine.extracted
+extract_from_untrusted
+успешно вернул schema
+tool_call_id
+(источник),
+schema_name
+,
+q_llm_model_id
+,
+tokens_used
+quarantine.failed
+Q-LLM не parsed в pydantic
+tool_call_id
+,
+schema_name
+,
+error_message
+delegate.*
+¶
+Type
+Когда эмитится
+Payload
+delegate.started
+delegate
+tool — спавн sub-Harness
+sub_session_id
+,
+agent_spec_name
+,
+parent_tool_call_id
+delegate.completed
+Sub-Harness вернул результат
+sub_session_id
+,
+outcome
+(
+success
+/
+error
+/
+partial
+)
+http.
+, browser.
+, shell.*
+¶
+Type
+Когда эмитится
+Payload
+http.requested
+http_client
+GET / HEAD
+url
+,
+method
+,
+status_code
+browser.navigated
+browser
+navigation
+url
+,
+final_url
+,
+status
+shell.executed
+bash
+tool
+command
+,
+exit_code
+,
+duration_ms
+Discriminated union
+¶
+В коде events реализованы как
+Event = Annotated[Union[...], Discriminator("type")]
+:
+from
+agenticos.contracts.events
+import
+(
+Event
+,
+SessionCreatedEvent
+,
+MessageUserEvent
+,
+MessageAssistantEvent
+,
+ModelCalledEvent
+,
+ModelRespondedEvent
+,
+ModelChunkEvent
+,
+ToolCalledEvent
+,
+ToolRespondedEvent
+,
+ToolErrorEvent
+,
+PolicyDeniedEvent
+,
+AuthDelegationVerifiedEvent
+,
+BudgetExceededEvent
+,
+CumulativeBudgetExceededEvent
+,
+ReplayStartedEvent
+,
+ReplayCompletedEvent
+,
+MemoryBlockWrittenEvent
+,
+MemoryArchivedEvent
+,
+MemorySearchedEvent
+,
+# ...
+)
+Payload каждого события — pydantic
+BaseModel
+с
+model_config = {"frozen": True}
+.
+Чтение event log
+¶
+from
+agenticos.contracts.events
+import
+MessageAssistantEvent
+,
+ToolCalledEvent
+async
+for
+ev
+in
+store
+.
+get_events
+(
+session_id
+):
+match
+ev
+:
+case
+MessageAssistantEvent
+(
+payload
+=
+p
+):
+print
+(
+f
+"agent:
+{
+p
+.
+content
+}
+"
+)
+case
+ToolCalledEvent
+(
+payload
+=
+p
+):
+print
+(
+f
+"called
+{
+p
+.
+tool_name
+}
+with
+{
+p
+.
+arguments
+}
+"
+)
+# ...
+Pagination через
+after_sequence
+:
+async
+for
+ev
+in
+store
+.
+get_events
+(
+session_id
+,
+after_sequence
+=
+42
+):
+...
+Идемпотентность
+¶
+Каждое событие имеет
+event_id: UUID
+. Повторный
+emit_event
+с тем же
+event_id
+возвращает существующий
+sequence
+без создания дубликата. Свойство критично для
+wake()
+recovery: double-emit от падающего worker'а не корруптирует журнал.
+Дальше
+¶
+Control plane
+— Harness loop, эмитирующий перечисленные события.
+Reference → Public API
+— типы payload'ов.
+ADR-0004
+— оригинальная схема.

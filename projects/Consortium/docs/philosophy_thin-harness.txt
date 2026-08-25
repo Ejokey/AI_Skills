@@ -1,0 +1,393 @@
+Thin harness (ADR-0083)
+¶
+Frontier alignment refactor. Explicit planning DAG не строится поверх reasoning-моделей. Применяются
+reasoning_effort
++ prompt caching + principle-based prompts. Эмпирическая валидация: 85.7% Pass¹ на τ²-retail benchmark'е с mid-tier моделью Gemini 3.5 Flash — паритет с Sonnet 4.5 reference (86.2%).
+Контекст
+¶
+Phase A → B → B+ harness optimizations (ADR-0079 PEV middleware, ADR-0080 typed plan, ADR-0081 PredicateWriteVerifier) обеспечили стабильный потолок 55% Pass¹ на τ²-retail. Гипотеза: «потолок gpt-5.4-mini в данной harness».
+Survey state-of-art систем 2026 года (Claude Code, Anthropic, OpenAI, Cognition) выявил, что три core capability mid-tier reasoning-моделей в AgenticOS не использовались:
+Capability
+Документированный эффект
+Статус до ADR-0083
+Extended thinking /
+reasoning_effort
+«token usage alone explains 80% performance variance on BrowseComp» (Anthropic multi-agent research)
+Не выставлен
+Prompt caching
+«41–80% API cost, 13–31% TTFT reduction» (arXiv 2601.06007)
+Не задействован
+Thin harness ≫ explicit scaffolding
+Anthropic явно отказывается от explicit planners и state graphs в Claude Code
+Включён Planner subagent (ADR-0079 Phase 3)
+Толстый и тонкий harness
+¶
+Толстая архитектура
+¶
+graph TB
+    U[User msg] --> P[Planner subagent<br/>LLM call #1]
+    P --> S[Structured plan<br/>steps + verifies]
+    S --> E[Executor agent<br/>LLM call #2 ... #N]
+    E --> V[PostWriteVerifier<br/>predicate eval]
+    V -->|fail| E
+    V -->|pass| C[Critique LLM call<br/>outcomes grader]
+    C --> Final[Final answer]
+Конструкция: explicit planning DAG, отдельный planner subagent создаёт typed plan, executor выполняет шаги, verifier проверяет predicates. Паттерн стал популярен в 2024 в LangGraph, CrewAI, AutoGen.
+Проблема: для reasoning-моделей (gpt-5.x, o-series, Sonnet 4.5+) конструкция избыточна. Модель выполняет «think step-by-step» внутренне эффективнее, чем внешний scaffolding.
+Тонкая архитектура
+¶
+graph TB
+    U[User msg] --> H[Harness loop]
+    H -->|reasoning_effort=high| L[LLM call<br/>inline план + tool use]
+    L -->|tool calls| T[Tools]
+    T --> L
+    L -->|final| Final[Final answer]
+Исключено:
+Explicit planner subagent (ADR-0079 Phase 3).
+Wave-based state graph.
+External plan validation на каждом шаге.
+Добавлено:
+reasoning_effort="high"
+(B.1 + B.3).
+max_tokens=500_000
+headroom (B.3).
+Prompt caching (B.6 — автоматически для OpenAI/Anthropic compatible providers).
+Tool Use Examples в descriptions (B.5).
+Principle-based prompts вместо ALWAYS/NEVER imperatives.
+Эмпирический результат
+¶
+После Variant A revert (см. §6) и pivot к Gemini 3.5 Flash через Gemini OpenAI-compat endpoint, 50-task per-domain sweep:
+Domain
+Pass¹
+Wall-clock
+airline
+42/49 = 85.7%
+30 минут (parallel=10)
+retail
+42/49 = 85.7%
+10 минут (parallel=10)
+Sonnet 4.5 retail reference — 86.2%. Достигнут паритет на mid-tier модели с разницей 0.5 ppt.
+Состав refactor'а
+¶
+B.1. reasoning_effort в LLMProvider Protocol
+¶
+Сигнатура
+LLMProvider.call
+:
+async
+def
+call
+(
+self
+,
+model_id
+:
+str
+,
+messages
+:
+list
+[
+Message
+],
+*
+,
+tools
+:
+list
+[
+Tool
+]
+|
+None
+=
+None
+,
+max_tokens
+:
+int
+=
+4096
+,
+temperature
+:
+float
+|
+None
+=
+None
+,
+reasoning_effort
+:
+str
+|
+None
+=
+None
+,
+system
+:
+str
+|
+None
+=
+None
+,
+)
+->
+ModelResponse
+:
+...
+OpenRouterProvider
+пропускает
+reasoning_effort
+через OpenAI extra_body или прямой параметр (зависит от версии SDK; OpenRouter принимает поле в request body для compatible моделей).
+Допустимые значения для OpenAI reasoning моделей:
+"minimal"
+,
+"low"
+,
+"medium"
+,
+"high"
+,
+"xhigh"
+(Ares paper, OpenAI docs).
+B.2. Harness pass-through
+¶
+class
+Harness
+:
+def
+__init__
+(
+self
+,
+...
+,
+max_tokens
+:
+int
+=
+4096
+,
+reasoning_effort
+:
+str
+|
+None
+=
+None
+,
+...
+,
+)
+->
+None
+:
+...
+_one_turn(...)
+передаёт оба параметра в
+llm.call(...)
+. Default values сохраняют existing behaviour.
+B.5. Tool Use Examples
+¶
+inspect_user
+,
+inspect_order
+,
+inspect_product
+— failure case, документированный в Doc («wrong tool selection when tools have similar names»). Каждый получает в description блок:
+Example: inspect_order(order_id='#W2378156')
+Returns: {order: {...}, products: [...], user: {...}}
+Use when: user mentions a specific order id and you need its items / status / owner.
+Don't use when: you only have a user_id — call inspect_user(user_id) instead.
+B.6. Prompt caching
+¶
+gpt-5.4-mini через OpenRouter (OpenAI provider) поддерживает automatic prompt caching для prefix ≥1024 tokens на repeated requests. Required ordering:
+tools → system → user messages
+. В AgenticOS этот порядок реализован.
+Explicit
+cache_control
+блоки не требуются для OpenAI моделей. Для Anthropic — добавляются явные блоки.
+Исключения refactor'а
+¶
+Из §«Что НЕ меняем» ADR-0083:
+MCP migration.
+Tool count — 31. JSON function calling работает. Документированный threshold для MCP: >10 tools или >3 chained calls с heavy chain. Marginal benefit, major migration cost.
+Code Execution / CodeAct.
+Тот же threshold.
+Multi-agent orchestrator-worker.
+Для shared-state задач (coding, tau2-retail) hurts. В AgenticOS присутствует
+delegate
+(ADR-0050–0053) для специфических задач, но не как default.
+Context compaction at >70% window.
+Retail-сессии содержат 30–40 messages, что не приближается к 70% context window gpt-5.4-mini (256k).
+Lazy MCP loading / Tool Search Tool.
+Не применимо при отсутствии MCP migration.
+Firecracker / E2B sandbox.
+InProcessBackend
+для evals (trusted Python);
+GVisorBackend
+для production tools.
+Empirical revert: возврат planner subagent
+¶
+20-task batch result после Variant B (planner removal): 9/20 = 45% Pass¹, регрессия -10 ppt относительно baseline 11/20 = 55%.
+Forensic re-run 11 fails:
+5/11 stochastic flips FAIL → PASS (45% variance). Single-trial noise dominates.
+6/11 persistent fails на одинаковом паттерне wrong_write / scope_incomplete / wrong_variant.
+Diagnostic на trace dumps (10 inspected): 0/10 traces вызвали
+plan_track
+(any op), 0/10 вызвали
+memory_block
+.
+Следствие:
+plan_structured
+block не создавался.
+PredicateWriteVerifier
+(ADR-0081 B.3) silently no-ops на каждом dispatched write. Wrong-arg writes проходили без проверки.
+Root cause.
+Planner subagent был data dependency, feeding
+plan_structured
+через прямой
+_persist_plan_structured
+write — независимо от agent behavior. Агент с
+reasoning_effort=high
+следует system prompt'у буквально и пропускает meta-инструкцию
+plan_track(op='set')
+в §5 «Required first-turn protocol».
+Lesson.
+Документированное «don't build planning DAG with reasoning models» — true для general agentic loops, но в специфической конфигурации gpt-5.4-mini в данной harness планер выполняет роль block-writer'а независимо от reasoning capability модели. Модель планирует внутренне, но не externalises; результат — downstream deterministic verification теряет данные.
+Применённое revert.
+use_planner_subagent=True
+default в
+HarnessAgentDriver
+. B.1–B.3, B.5–B.6 retained. Planner subagent runs once на первом user turn, пишет блоки
+plan
+(markdown) и
+plan_structured
+(JSON) до первого turn'а executing agent.
+PredicateWriteVerifier
+получает данные для evaluation.
+«Thin harness» не является absolute principle, а context-dependent наблюдением. Reasoning models сокращают некоторые потребности в scaffolding, но не все. Empirical measurement приоритетнее документной генерализации.
+Гарантии refactor'а
+¶
+Token cost:
+reasoning_effort=high
+добавляет thinking tokens (5–30k на call).
+max_tokens=300k
+обеспечивает headroom. Net cost per task: от $0 (gpt-5.4-mini base) до $0.005–0.01 с reasoning.
+Wall time: thinking добавляет латентность 20–60 секунд на task. Trade-off приемлем для customer-service Pass¹.
+Backward compatibility: existing Harness consumers не требуют изменений.
+reasoning_effort
+и
+max_tokens
+optional с safe defaults.
+Запрещено:
+reasoning_effort
+для не-reasoning моделей (claude-haiku-3.5). API rejects. Соответствие effort и model class — ответственность driver'а.
+Применение
+¶
+Минимальный wiring:
+from
+agenticos
+import
+Harness
+,
+OpenRouterProvider
+,
+SQLiteSessionStore
+from
+agenticos.settings
+import
+get_settings
+settings
+=
+get_settings
+()
+llm
+=
+OpenRouterProvider
+(
+api_key
+=
+settings
+.
+openrouter_api_key
+)
+store
+=
+SQLiteSessionStore
+(
+db_path
+=
+":memory:"
+)
+await
+store
+.
+init_schema
+()
+harness
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+llm
+,
+max_tokens
+=
+500_000
+,
+reasoning_effort
+=
+"high"
+,
+)
+Соответствие effort и model class:
+Model class
+reasoning_effort
+Примечание
+Anthropic Claude Haiku 4.5
+None
+non-reasoning, fast
+Anthropic Claude Sonnet 4.5
+"medium"
+или
+None
+hybrid — reasoning по запросу
+OpenAI gpt-5.x mini
+"high"
+reasoning model
+OpenAI o-series
+"high"
+reasoning model — обязательно
+Google Gemini 3.5 Flash
+"high"
+(через Gemini OpenAI-compat с thought_signature plumbing)
+reasoning model
+Google Gemini Pro
+"high"
+reasoning model
+Анти-паттерны
+¶
+Конструирование explicit planning DAG до получения эмпирического доказательства, что он повышает Pass¹ на используемом model class.
+ALWAYS / NEVER правила в system prompt'е. Указывают на underlying bug (см. ADR-0076 anti-pattern detection).
+Wave-based state machine при Pass¹ <30%. Фундаментальная проблема — не в harness layout.
+Дальше
+¶
+Архитектура → Control plane
+— спецификация Harness с
+reasoning_effort
+и
+max_tokens
+.
+ADR-0080..0082
+— preceding work (typed plan, executable-predicate verifier, outcomes-grader).
+ADR-0083
+— полный текст с измерениями и empirical revert.

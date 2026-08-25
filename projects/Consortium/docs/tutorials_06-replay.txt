@@ -1,0 +1,444 @@
+06 · Replay сессии
+¶
+replay_session
+повторно прогоняет completed event log через новый Harness с другой моделью. Оригинальный журнал не модифицируется (wake-семантика).
+Код
+¶
+Файл
+replay_recipe.py
+:
+from
+__future__
+import
+annotations
+import
+asyncio
+from
+datetime
+import
+UTC
+,
+datetime
+from
+uuid
+import
+uuid4
+from
+agenticos
+import
+(
+Agent
+,
+Harness
+,
+ModelResponse
+,
+SQLiteSessionStore
+,
+TokenUsage
+,
+replay_session
+,
+)
+from
+agenticos.contracts.events
+import
+MessageAssistantEvent
+,
+MessageUserEvent
+from
+agenticos.testing
+import
+MockLLMProvider
+def
+_make_llm
+(
+label
+:
+str
+)
+->
+MockLLMProvider
+:
+return
+MockLLMProvider
+(
+responses
+=
+[
+ModelResponse
+(
+content
+=
+f
+"[
+{
+label
+}
+] answer to your question."
+,
+usage
+=
+TokenUsage
+(
+input_tokens
+=
+10
+,
+output_tokens
+=
+8
+),
+stop_reason
+=
+"end_turn"
+,
+request_id
+=
+f
+"req-
+{
+label
+}
+"
+,
+model_id
+=
+label
+,
+),
+])
+async
+def
+main
+()
+->
+None
+:
+store
+=
+SQLiteSessionStore
+(
+db_path
+=
+":memory:"
+)
+await
+store
+.
+init_schema
+()
+# Оригинальная сессия с model-v1
+original_agent
+=
+Agent
+(
+agent_id
+=
+uuid4
+(),
+created_at
+=
+datetime
+.
+now
+(
+UTC
+),
+system_prompt
+=
+"Original prompt"
+,
+model_id
+=
+"model-v1"
+,
+)
+await
+store
+.
+register_agent
+(
+original_agent
+)
+original_session
+=
+await
+store
+.
+create_session
+(
+original_agent
+.
+agent_id
+,
+created_by
+=
+"recipe-06-orig"
+,
+)
+harness_v1
+=
+Harness
+(
+store
+=
+store
+,
+llm
+=
+_make_llm
+(
+"model-v1"
+))
+await
+harness_v1
+.
+handle_user_message
+(
+original_session
+.
+session_id
+,
+"Tell me about agents."
+,
+)
+await
+store
+.
+update_session_status
+(
+original_session
+.
+session_id
+,
+"completed"
+)
+# Replay с model-v2
+new_session_id
+=
+await
+replay_session
+(
+source_session_id
+=
+original_session
+.
+session_id
+,
+store
+=
+store
+,
+llm
+=
+_make_llm
+(
+"model-v2"
+),
+new_model_id
+=
+"model-v2"
+,
+)
+print
+(
+f
+"original session:
+{
+original_session
+.
+session_id
+}
+"
+)
+print
+(
+f
+"replay session:
+{
+new_session_id
+}
+"
+)
+async
+for
+ev
+in
+store
+.
+get_events
+(
+new_session_id
+):
+if
+isinstance
+(
+ev
+,
+MessageUserEvent
+):
+print
+(
+f
+"  user:
+{
+ev
+.
+payload
+.
+content
+!r}
+"
+)
+elif
+isinstance
+(
+ev
+,
+MessageAssistantEvent
+):
+print
+(
+f
+"  assistant:
+{
+ev
+.
+payload
+.
+content
+!r}
+"
+)
+if
+__name__
+==
+"__main__"
+:
+asyncio
+.
+run
+(
+main
+())
+Вывод:
+original session: 7d9b176a-...
+replay session:   9a10e064-...
+user: 'Tell me about agents.'
+assistant: '[model-v2] answer to your question.'
+Ключевые свойства
+¶
+Оригинал не модифицируется.
+Source session event log read-only.
+replay_session
+создаёт новые
+agent_id
+и
+session_id
+, повторно прогоняет каждое
+MessageUserEvent
+через новый Harness с новой моделью.
+Отклонение active source.
+Source session должна находиться в состоянии
+completed
+или
+errored
+. Для
+active
+сессии поднимается
+SessionNotReplayableError
+.
+Эмиссия replay-событий.
+События
+replay.started
+и
+replay.completed
+эмитятся в
+новой
+сессии. При ошибке в replay
+replay.completed
+с
+error_message
+эмитится через
+finally
+.
+Применение
+¶
+Regression testing.
+Прогон production trace через новую версию модели:
+new_id
+=
+await
+replay_session
+(
+source_session_id
+=
+production_session_id
+,
+store
+=
+store
+,
+llm
+=
+OpenRouterProvider
+(
+api_key
+=...
+),
+new_model_id
+=
+"anthropic/claude-sonnet-4.5"
+,
+# ранее использовалась claude-haiku-4.5
+)
+# Сравнение event log'ов: те же user messages, разные assistant content
+async
+for
+orig_ev
+in
+store
+.
+get_events
+(
+production_session_id
+):
+...
+async
+for
+new_ev
+in
+store
+.
+get_events
+(
+new_id
+):
+...
+Debugging incident.
+Воспроизведение production-инцидента в изолированной среде с полным trace.
+A/B testing моделей.
+Прогон N completed сессий через каждую модель и сравнение outcomes.
+Ограничения
+¶
+Replay не копирует следующие компоненты state'а:
+Tool calls и tool results.
+Replay прогоняет только user messages. Новый Harness выполняет собственные tool calls, которые могут отличаться от исходных.
+Memory state.
+Новый
+agent_id
+означает новую memory. Для shared memory требуется
+ParentScopedMemoryManager
+или явное копирование.
+Workspace files.
+Не копируются автоматически; при необходимости — отдельный шаг копирования workspace.
+Эти ограничения сознательно зафиксированы в ADR-0016 (§«Не делалось в этой Фазе»). Replay предназначен для conversational regression, не full state restoration.
+Дальше
+¶
+Архитектура → Observability & Replay
+— полная спецификация.
+07 · Свой Tool
+.
+Integrations → Eval pipeline
+— replay-based regression testing.

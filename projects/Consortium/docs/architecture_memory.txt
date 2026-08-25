@@ -1,0 +1,367 @@
+Memory — three-tier
+¶
+Identity-bound memory: привязана к
+agent_id
+, не к
+session_id
+. Сессии — представления над identity-bound state.
+Три уровня
+¶
+flowchart LR
+    subgraph C["Core Memory (всегда в system prompt)"]
+        CB1["block: persona<br/>≤8K char"]
+        CB2["block: preferences<br/>≤8K char"]
+        CB3["..."]
+    end
+    subgraph A["Archival (hybrid retrieval)"]
+        AE1["entry: 'user prefers pineapple on pizza'<br/>BM25 × cosine × recency × importance"]
+        AE2["entry: 'allergic to walnuts'"]
+        AE3["..."]
+    end
+    subgraph R["Recall (cross-session history)"]
+        R1["msg from session_42<br/>FTS5 indexed"]
+        R2["msg from session_43"]
+        R3["..."]
+    end
+    LLM["P-LLM<br/>system prompt + history"] --> C
+    LLM -.->|"agent calls memory_search"| A
+    LLM -.->|"agent calls memory_recall"| R
+Core memory blocks
+¶
+Заметки длиной не более 8K символов на блок и не более 16K суммарно на агента. Инжектятся в system prompt каждого turn'а через
+reduce_events_to_messages
+. API — tool
+memory_block
+с операциями
+read / write / list / delete
+. Имена блоков проходят snake_case валидацию (regex
+^[a-z][a-z0-9_]*$
+).
+Пример содержимого:
+[persona]
+Имя — Иван. Работает в финтех. Предпочитает короткие ответы.
+[preferences]
+Язык — русский. Часовой пояс — Europe/Moscow.
+Archival entries
+¶
+Долгосрочное хранилище фактов с категориями (около 10 типов в стиле Memanto:
+preference
+,
+health
+,
+profile
+и других). Hybrid retrieval:
+BM25 × cosine_similarity × recency_decay × √importance
+. API —
+memory_archive
+для записи и
+memory_search
+для чтения. Identity isolation проверяется контракт-тестами: agent A не видит archival entries agent B. Expired entries (по
+expires_at
+) фильтруются в search.
+Recall — cross-session message history
+¶
+FTS5 индекс над message bodies всех сессий того же
+agent_id
+(ADR-0093). API — tool
+memory_recall
+(Phase A) и
+Harness(recall_store=...)
+auto-indexer (Phase B).
+Storage backends
+¶
+Backend
+Применение
+Retrieval
+SQLiteMemoryStore
+dev, single-node
+FTS5 BM25 + recency × importance scoring
+PostgresMemoryStore
+(ADR-0034)
+Production text-only
+tsvector + GIN
+PostgresMemoryStore + pgvector
+(ADR-0035)
+Production multimodal
+BM25 + dense embedding + RRF fusion
+Embeddings (multimodal)
+¶
+EmbeddingProvider
+Protocol:
+class
+EmbeddingProvider
+(
+Protocol
+):
+async
+def
+embed_documents
+(
+self
+,
+parts
+:
+list
+[
+EmbeddingPart
+])
+->
+list
+[
+list
+[
+float
+]]:
+...
+async
+def
+embed_queries
+(
+self
+,
+parts
+:
+list
+[
+EmbeddingPart
+])
+->
+list
+[
+list
+[
+float
+]]:
+...
+Реализация
+GoogleEmbeddingProvider
+оборачивает Google gemini-embedding-2:
+Multimodal: текст, изображения, аудио, видео, PDF в одно векторное пространство.
+Query prefix:
+"task: search query | "
+(
+prepare_query_prefix
+).
+Document prefix:
+"task: search result | "
+(
+prepare_document_prefix
+).
+Размерность вектора immutable per index. Смена эмбеддинга требует re-index (TD-015, accepted limitation).
+Эмпирическое доказательство ADR-0035: запрос «ananas as a pizza topping» через hybrid retrieval возвращает entry «User prefers pineapple on pizza» как top-1 без лексического перекрытия. Semantic search end-to-end функционален.
+MemoryManager
+¶
+from
+agenticos
+import
+MemoryManager
+,
+SQLiteMemoryStore
+memory_store
+=
+SQLiteMemoryStore
+(
+db_path
+=
+"agenticos.db"
+)
+await
+memory_store
+.
+init_schema
+()
+memory
+=
+MemoryManager
+(
+memory_store
+,
+session_store
+=
+session_store
+)
+# Archive
+await
+memory
+.
+archive
+(
+agent
+.
+agent_id
+,
+"User prefers pineapple on pizza."
+,
+category
+=
+"preference"
+,
+importance
+=
+0.8
+,
+)
+# Search
+result
+=
+await
+memory
+.
+search
+(
+agent
+.
+agent_id
+,
+"pineapple"
+,
+limit
+=
+3
+)
+for
+hit
+in
+result
+.
+hits
+:
+print
+(
+f
+"
+{
+hit
+.
+final_score
+:
+.3f
+}
+[
+{
+hit
+.
+entry
+.
+category
+}
+]
+{
+hit
+.
+entry
+.
+content
+}
+"
+)
+# Core blocks
+await
+memory
+.
+write_block
+(
+agent
+.
+agent_id
+,
+"persona"
+,
+"I am a careful assistant."
+)
+blocks
+=
+await
+memory
+.
+list_blocks
+(
+agent
+.
+agent_id
+)
+MemoryManager
+опционально принимает
+session_store=...
+для эмиссии audit events:
+memory.block_written
+,
+memory.block_deleted
+.
+memory.archived
+,
+memory.searched
+.
+Sleep-time consolidation (ADR-0058 + 0074)
+¶
+Batch-сервис, периодически (cron в production driver) выполняющий:
+Чтение recent archival entries в TTL window.
+LLM-driven summarization: группировка related entries в semantic clusters.
+Запись summary entries с повышенной importance, деактивация оригиналов.
+from
+agenticos.memory.sleep_time
+import
+SleepTimeScheduler
+,
+consolidate_entries
+scheduler
+=
+SleepTimeScheduler
+(
+...
+)
+report
+=
+await
+consolidate_entries
+(
+memory
+,
+agent_id
+,
+llm_provider
+=...
+)
+Pre-flight и post-flight гарды (TD-021): процедура skip'ается, если корпус слишком короткий или summary не сжимает (compression ratio ≥ 100%).
+Identity invariants
+¶
+Core blocks isolated по
+agent_id
+(контракт-тест).
+Archival entries isolated по
+agent_id
+.
+Recall —
+agent_id
+-scoped, не session-scoped.
+Sub-agents через
+delegate
+могут получить
+ParentScopedMemoryManager
+(read-only view на parent's memory и write в собственную), ADR-0052.
+ADR map
+¶
+ADR
+Что фиксирует
+ADR-0010
+SQLite + FTS5
+ADR-0011
+Three-tier + identity-binding + BM25 × √importance × recency
+ADR-0034
+PostgresMemoryStore (text)
+ADR-0035
+pgvector hybrid + Google multimodal embeddings
+ADR-0058
+Sleep-time consolidation
+ADR-0074
+Production wiring
+ADR-0093
+Cross-session recall layer
+Дальше
+¶
+Tool reference → Memory tools
+— memory_block, memory_archive, memory_search, memory_recall.
+Production → Postgres + pgvector
+.
+Учебник → 04 · Three-tier memory
+.

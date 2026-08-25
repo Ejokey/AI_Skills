@@ -1,0 +1,538 @@
+04 · Three-tier memory
+¶
+Прямое использование
+MemoryManager
+API: archive фактов и BM25 search. Без LLM. Tool-based вариант (
+memory_archive
+/
+memory_search
+для использования агентом) — в
+Tool reference → Memory tools
+.
+Код
+¶
+Файл
+memory_recipe.py
+:
+from
+__future__
+import
+annotations
+import
+asyncio
+from
+datetime
+import
+UTC
+,
+datetime
+from
+uuid
+import
+uuid4
+from
+agenticos
+import
+(
+Agent
+,
+MemoryManager
+,
+SQLiteMemoryStore
+,
+SQLiteSessionStore
+,
+)
+async
+def
+main
+()
+->
+None
+:
+session_store
+=
+SQLiteSessionStore
+(
+db_path
+=
+":memory:"
+)
+await
+session_store
+.
+init_schema
+()
+memory_store
+=
+SQLiteMemoryStore
+(
+db_path
+=
+":memory:"
+)
+await
+memory_store
+.
+init_schema
+()
+memory
+=
+MemoryManager
+(
+memory_store
+,
+session_store
+=
+session_store
+)
+agent
+=
+Agent
+(
+agent_id
+=
+uuid4
+(),
+created_at
+=
+datetime
+.
+now
+(
+UTC
+),
+system_prompt
+=
+"recipe agent"
+,
+model_id
+=
+"mock-model"
+,
+)
+await
+session_store
+.
+register_agent
+(
+agent
+)
+# Archive — три факта с разной importance
+await
+memory
+.
+archive
+(
+agent
+.
+agent_id
+,
+"The user prefers pineapple on pizza."
+,
+category
+=
+"preference"
+,
+importance
+=
+0.8
+,
+)
+await
+memory
+.
+archive
+(
+agent
+.
+agent_id
+,
+"The user is allergic to walnuts."
+,
+category
+=
+"health"
+,
+importance
+=
+0.95
+,
+)
+await
+memory
+.
+archive
+(
+agent
+.
+agent_id
+,
+"The user's preferred timezone is Europe/Moscow."
+,
+category
+=
+"profile"
+,
+importance
+=
+0.5
+,
+)
+# Search — BM25 × recency × importance
+for
+query
+in
+(
+"pineapple"
+,
+"allergic"
+,
+"Moscow"
+):
+result
+=
+await
+memory
+.
+search
+(
+agent
+.
+agent_id
+,
+query
+,
+limit
+=
+3
+)
+print
+(
+f
+"query=
+{
+query
+!r}
+:
+{
+len
+(
+result
+.
+hits
+)
+}
+hits /
+{
+result
+.
+total_candidates
+}
+candidates"
+)
+for
+hit
+in
+result
+.
+hits
+:
+print
+(
+f
+"  [final=
+{
+hit
+.
+final_score
+:
+.3f
+}
+bm25=
+{
+hit
+.
+bm25_score
+:
+.3f
+}
+] "
+f
+"[
+{
+hit
+.
+entry
+.
+category
+}
+]
+{
+hit
+.
+entry
+.
+content
+}
+"
+)
+if
+__name__
+==
+"__main__"
+:
+asyncio
+.
+run
+(
+main
+())
+Вывод:
+query='pineapple': 1 hits / 1 candidates
+[final=0.474 bm25=0.530] [preference] The user prefers pineapple on pizza.
+query='allergic': 1 hits / 1 candidates
+[final=0.516 bm25=0.530] [health] The user is allergic to walnuts.
+query='Moscow': 1 hits / 1 candidates
+[final=0.337 bm25=0.477] [profile] The user's preferred timezone is Europe/Moscow.
+Ключевые свойства
+¶
+Identity-bound storage.
+Memory привязана к
+agent_id
+, не к
+session_id
+. Новая сессия использует те же archival entries; завершение сессии не удаляет память. Agent A не видит archival entries agent B — контракт-тест.
+Hybrid scoring.
+final_score = bm25_score × recency_decay × √importance
+. High-importance entry поднимается в ранжировании даже при среднем BM25 score.
+Опциональный audit.
+Параметр
+session_store=...
+в
+MemoryManager
+активирует эмиссию audit events (
+memory.archived
+,
+memory.searched
+) в session log. Без него — silent operation.
+Core memory blocks
+¶
+Параллельно с archival — core blocks (≤8K символов на блок, ≤16K total на агента). Инжектируются в system prompt каждого turn'а.
+# Write
+await
+memory
+.
+write_block
+(
+agent
+.
+agent_id
+,
+"persona"
+,
+"Имя — Иван. Работает в финтех. Предпочитает короткие ответы."
+,
+)
+await
+memory
+.
+write_block
+(
+agent
+.
+agent_id
+,
+"preferences"
+,
+"Язык — русский. Стиль — формальный."
+,
+)
+# Read
+block
+=
+await
+memory
+.
+read_block
+(
+agent
+.
+agent_id
+,
+"persona"
+)
+# List
+blocks
+=
+await
+memory
+.
+list_blocks
+(
+agent
+.
+agent_id
+)
+# Delete
+await
+memory
+.
+delete_block
+(
+agent
+.
+agent_id
+,
+"preferences"
+)
+Имена блоков проходят snake_case валидацию (regex
+^[a-z][a-z0-9_]*$
+).
+Tool-based memory для LLM
+¶
+Для управления памятью самой моделью регистрируются
+memory_*
+tools. Это автоматически выполняется
+Harness
+при передаче
+MemoryManager
+и
+register_memory_tools=True
+(default).
+harness
+=
+Harness
+(
+store
+=
+session_store
+,
+llm
+=
+llm
+,
+tools
+=
+tools
+,
+# ToolManager — необходим для memory tools
+memory
+=
+memory
+,
+# register_memory_tools=True по умолчанию
+)
+# Регистрируются: memory_block, memory_archive, memory_search
+Модель самостоятельно вызывает
+memory_archive("...")
+и
+memory_search("...")
+по контексту.
+Production: Postgres + pgvector
+¶
+Для multimodal embeddings и production scale:
+from
+agenticos
+import
+PostgresMemoryStore
+,
+GoogleEmbeddingProvider
+embedding
+=
+GoogleEmbeddingProvider
+(
+api_key
+=
+os
+.
+environ
+[
+"GEMINI_API_KEY"
+])
+memory_store
+=
+PostgresMemoryStore
+(
+dsn
+=
+"postgresql://..."
+,
+embedding_provider
+=
+embedding
+,
+tenant_id
+=
+"my-tenant"
+,
+enable_rls
+=
+True
+,
+)
+await
+memory_store
+.
+init_schema
+()
+Запрос «ananas as a pizza topping» через hybrid retrieval (BM25 + cosine на multimodal embeddings) возвращает entry «User prefers pineapple on pizza» как top-1 без лексического перекрытия.
+Cross-session recall (ADR-0093)
+¶
+Recall — поиск по message history других сессий того же агента:
+from
+agenticos
+import
+RecallStore
+,
+SQLiteRecallStore
+recall
+=
+SQLiteRecallStore
+(
+db_path
+=
+"recall.db"
+)
+await
+recall
+.
+init_schema
+()
+harness
+=
+Harness
+(
+store
+=
+session_store
+,
+llm
+=
+llm
+,
+memory
+=
+memory
+,
+recall_store
+=
+recall
+,
+# Phase B Harness auto-indexer
+)
+# Каждый MessageUserEvent и MessageAssistantEvent индексируется в RecallStore.
+# Tool memory_recall доступен агенту через register_memory_tools=True.
+Модель вызывает
+memory_recall(query="...")
+для поиска по предыдущим сессиям.
+Дальше
+¶
+Tool reference → Memory tools
+— детали memory_block, memory_archive, memory_search, memory_recall.
+Архитектура → Memory
+— полная спецификация three-tier и retrieval.
+Production → Postgres + pgvector
+.
+Integrations → Sleep-time consolidation
+— offline summarization.

@@ -1,0 +1,604 @@
+Control plane — Brain + Session
+¶
+Детальная спецификация Brain (Harness и LLMProvider) и Session (event-sourced журнал). Расширяет
+Brain / Hands / Session
+до уровня сигнатур.
+Harness
+¶
+Harness
+(
+src/agenticos/brain/harness.py
+) — stateless event loop. Полная сигнатура конструктора (после ADR-0083 + 0090 + 0093 + 0100):
+class
+Harness
+:
+def
+__init__
+(
+self
+,
+store
+:
+SessionStore
+,
+llm
+:
+LLMProvider
+,
+tools
+:
+ToolManager
+|
+None
+=
+None
+,
+memory
+:
+MemoryManager
+|
+None
+=
+None
+,
+policy
+:
+PolicyBackend
+|
+None
+=
+None
+,
+*
+,
+principal
+:
+Principal
+|
+None
+=
+None
+,
+delegation
+:
+DelegationChain
+|
+None
+=
+None
+,
+plan_only
+:
+bool
+=
+False
+,
+budget
+:
+TokenBudget
+|
+None
+=
+None
+,
+pricing_table
+:
+PricingTable
+=
+DEFAULT_PRICING_TABLE
+,
+max_tool_iterations
+:
+int
+=
+10
+,
+register_memory_tools
+:
+bool
+=
+True
+,
+workspace
+:
+WorkspacePath
+|
+None
+=
+None
+,
+# ADR-0083 frontier alignment
+max_tokens
+:
+int
+=
+4096
+,
+reasoning_effort
+:
+str
+|
+None
+=
+None
+,
+# ADR-0079 PEV middleware (опционально)
+argument_validator
+:
+ArgumentValidator
+|
+None
+=
+None
+,
+pre_completion_checker
+:
+PreCompletionChecker
+|
+None
+=
+None
+,
+loop_detector
+:
+LoopDetector
+|
+None
+=
+None
+,
+post_write_verifier
+:
+PostWriteVerifier
+|
+None
+=
+None
+,
+# ADR-0090 Phase B персистентные cumulative budgets
+cumulative_guard
+:
+CumulativeCostGuard
+|
+None
+=
+None
+,
+enduser_id
+:
+str
+|
+None
+=
+None
+,
+# TD-044 subtree cost aggregation
+subtree_root_agent_id
+:
+UUID
+|
+None
+=
+None
+,
+# TD-045 streaming
+stream_llm_responses
+:
+bool
+=
+False
+,
+# ADR-0093 Phase B recall layer
+recall_store
+:
+RecallStore
+|
+None
+=
+None
+,
+)
+->
+None
+:
+...
+Harness loop
+¶
+Метод
+handle_user_message(session_id, content)
+выполняет один turn:
+sequenceDiagram
+    participant C as Caller
+    participant H as Harness
+    participant S as SessionStore
+    participant M as MemoryManager
+    participant L as LLMProvider
+    participant T as ToolManager
+    participant P as PolicyEngine
+
+    C->>H: handle_user_message(session_id, "...")
+    H->>H: verify delegation (idempotent)
+    H->>S: emit message.user
+    loop until final or max_iterations
+        H->>M: fetch core blocks
+        H->>S: get_events (reduce → messages)
+        H->>S: emit model.called
+        H->>L: call(model_id, messages, tools=...)
+        L-->>H: ModelResponse
+        H->>S: emit model.responded
+        H->>H: cost guard check
+        alt has tool_calls
+            par parallel tools (concurrent=True)
+                H->>T: bind + dispatch
+                T->>P: policy gate
+                P-->>T: allow / PolicyDenied
+                T-->>H: ToolResult / ToolError
+                H->>S: emit tool.called + tool.responded/error
+            end
+        else final message
+            H->>S: emit message.assistant
+        end
+    end
+    H-->>C: ModelResponse
+Компоненты loop'а:
+reduce_events_to_messages
+(
+src/agenticos/brain/reduce.py
+) — свёртка event log в список
+Message
+. Содержит labeled untrusted wrapping (ADR-0076).
+Policy gate
+в
+ToolManager.dispatch
+— first-match-wins. Default
+default_safe_rules()
+блокирует destructive tools в plan-only.
+CostGuard.check
+после
+model.responded
+— при превышении эмитит
+budget.exceeded
+и переводит сессию в
+errored
+.
+CumulativeCostGuard
+(опционально, ADR-0090 Phase B) — cross-session aggregation, эмитит
+budget.cumulative_exceeded
+.
+LLMProvider Protocol
+¶
+class
+LLMProvider
+(
+Protocol
+):
+async
+def
+call
+(
+self
+,
+model_id
+:
+str
+,
+messages
+:
+list
+[
+Message
+],
+*
+,
+tools
+:
+list
+[
+Tool
+]
+|
+None
+=
+None
+,
+max_tokens
+:
+int
+=
+4096
+,
+temperature
+:
+float
+|
+None
+=
+None
+,
+reasoning_effort
+:
+str
+|
+None
+=
+None
+,
+system
+:
+str
+|
+None
+=
+None
+,
+)
+->
+ModelResponse
+:
+...
+async
+def
+stream
+(
+# опционально, TD-045
+self
+,
+model_id
+:
+str
+,
+messages
+:
+list
+[
+Message
+],
+...
+,
+)
+->
+AsyncIterator
+[
+ModelChunk
+]:
+...
+Реализации:
+Provider
+Применение
+OpenRouterProvider
+Default (ADR-0007). Маршрутизирует к Anthropic, OpenAI, Google, Mistral, Llama и другим через OpenRouter API
+AnthropicProvider
+Прямой Anthropic API. Text-only — при попытке передать tools поднимает
+LLMPermanentError
+(ADR-0084). Production tool-using deployments используют OpenRouter
+MockLLMProvider
+Расположен в
+agenticos.testing
+. Заготовленные ответы для unit-тестов
+Event sourcing — SessionStore
+¶
+class
+SessionStore
+(
+Protocol
+):
+async
+def
+init_schema
+(
+self
+)
+->
+None
+:
+...
+async
+def
+register_agent
+(
+self
+,
+agent
+:
+Agent
+)
+->
+None
+:
+...
+async
+def
+get_agent
+(
+self
+,
+agent_id
+:
+UUID
+)
+->
+Agent
+:
+...
+async
+def
+create_session
+(
+self
+,
+agent_id
+:
+UUID
+,
+*
+,
+created_by
+:
+str
+,
+principal_subject
+:
+str
+|
+None
+=
+None
+,
+delegation_purpose
+:
+str
+|
+None
+=
+None
+,
+)
+->
+Session
+:
+...
+async
+def
+get_session
+(
+self
+,
+session_id
+:
+UUID
+)
+->
+Session
+:
+...
+async
+def
+update_session_status
+(
+self
+,
+session_id
+:
+UUID
+,
+status
+:
+SessionStatus
+)
+->
+None
+:
+...
+async
+def
+emit_event
+(
+self
+,
+session_id
+:
+UUID
+,
+event
+:
+Event
+)
+->
+EventEnvelope
+:
+...
+async
+def
+get_events
+(
+self
+,
+session_id
+:
+UUID
+,
+*
+,
+after_sequence
+:
+int
+=
+0
+)
+->
+AsyncIterator
+[
+EventEnvelope
+]:
+...
+Реализации:
+SQLiteSessionStore
+—
+aiosqlite
+, append-only, идемпотентность по
+event_id
+. Для dev и tests. Конфигурация:
+db_path=":memory:"
+или путь к файлу.
+PostgresSessionStore
+—
+asyncpg
+, multi-tenant с колонкой
+tenant_id
+(ADR-0096), опциональные RLS политики. Для production.
+Critical invariants
+¶
+Append-only.
+API не содержит UPDATE или DELETE на events. Проверяется контракт-тестом.
+Идемпотентность
+event_id
+.
+Повторный
+emit_event
+с тем же
+event_id
+возвращает существующий sequence. Проверяется контракт-тестом.
+Stateless Harness.
+Per-session state не хранится в
+self
+.
+wake()
+восстанавливает контекст через
+get_events
+. Проверяется контракт-тестом.
+No credentials в harness-graph.
+Import-linter контракт:
+agenticos.brain.harness
+не имеет права транзитивно импортировать SDK поставщиков. Структурный инвариант — pyright, ruff, imports не позволяют его нарушить.
+ADR map
+¶
+ADR
+Что фиксирует
+ADR-0004
+Event-sourcing схема и SessionStore контракт
+ADR-0005
+LLMProvider abstraction
+ADR-0007
+OpenRouter как primary transport
+ADR-0016
+Replay API
+ADR-0032
+PostgresSessionStore
+ADR-0079..0082
+PEV middleware
+ADR-0083
+reasoning_effort, max_tokens, thin harness
+ADR-0093
+Recall layer Phase B Harness wedge
+ADR-0100
+ToolManager binding через contextvars
+Дальше
+¶
+Execution plane
+— ToolManager и sandbox backends.
+Event таксономия
+— все 28+ типов событий.
+Учебник → 01 · Hello, Harness
+.
+Учебник → 06 · Replay сессии
+.

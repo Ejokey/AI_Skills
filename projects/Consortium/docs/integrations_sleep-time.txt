@@ -1,0 +1,171 @@
+Sleep-time consolidation
+¶
+ADR-0058 + ADR-0074. Batch-сервис, суммаризующий old archival entries в semantic clusters по cron. Episodic → semantic memory transition.
+Концепция
+¶
+Letta-style observation: long-running агенты накапливают большое количество low-importance archival entries. Периодическая консолидация группирует related entries в высокоуровневые summary, сохраняя retrieval-quality при сокращении объёма хранилища.
+flowchart LR
+    A[Archival entries<br/>5000+ raw observations] --> S[Sleep-time scheduler<br/>nightly cron]
+    S --> C[Cluster по semantic similarity<br/>или category]
+    C --> L[LLM-driven summarisation<br/>cluster → summary entry]
+    L --> N[Запись summary entries с высокой importance<br/>деактивация оригиналов]
+API
+¶
+from
+agenticos.memory.sleep_time
+import
+(
+SleepTimeScheduler
+,
+consolidate_entries
+,
+ConsolidationReport
+,
+)
+report
+=
+await
+consolidate_entries
+(
+memory
+=
+memory_manager
+,
+agent_id
+=
+agent
+.
+agent_id
+,
+llm
+=
+openrouter_provider
+,
+model_id
+=
+"anthropic/claude-haiku-4.5"
+,
+ttl_days
+=
+30
+,
+# entries старше ttl_days — кандидаты на consolidation
+min_cluster_size
+=
+5
+,
+max_clusters
+=
+10
+,
+)
+print
+(
+f
+"Consolidated
+{
+report
+.
+entries_consolidated
+}
+entries в
+{
+report
+.
+clusters_created
+}
+clusters."
+)
+Pre-flight и post-flight гарды (TD-021)
+¶
+consolidate_entries
+:
+Pre-flight skip
+при недостаточном размере корпуса (
+< min_cluster_size
+candidates).
+Post-flight skip
+при отсутствии компрессии (compression_ratio ≥ 100%) — no-op без записи.
+Гарды защищают от пустой работы и регрессии entries.
+Scheduler
+¶
+from
+agenticos.memory.sleep_time
+import
+SleepTimeScheduler
+,
+ScheduleResult
+scheduler
+=
+SleepTimeScheduler
+(
+memory
+=
+memory
+,
+llm
+=
+llm
+,
+model_id
+=
+"anthropic/claude-haiku-4.5"
+,
+schedule_cron
+=
+"0 3 * * *"
+,
+# 3:00 ежедневно
+)
+result
+:
+ScheduleResult
+=
+await
+scheduler
+.
+run_once
+(
+agent_id
+)
+В production обычно оборачивается в
+apscheduler
+или cron job, читающий список
+agent_id
+и запускающий consolidation для каждого.
+Production wiring (ADR-0074)
+¶
+Production driver (
+scripts/run_api_server_prod.py
+) опционально wire'ит SleepTimeScheduler с config:
+sleepTime
+:
+enabled
+:
+true
+schedule
+:
+"0
+3
+*
+*
+*"
+ttlDays
+:
+30
+minClusterSize
+:
+5
+Эмпирическое доказательство
+¶
+ADR-0058 §«Live evidence»: 542 raw entries → 23 consolidated summaries, compression ratio ~30%. Downstream
+memory_search
+quality сохраняется (regression test).
+Дальше
+¶
+ADR-0058
+.
+ADR-0074
+.
+Архитектура → Memory
+.
