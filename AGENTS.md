@@ -128,6 +128,7 @@ tenders/<Тендер>/
 | **Короткое КП на ИИ-продукт вне тендера** (AIR/КСИИ: SHADO, RAG, AgenticOS) | `skills/sales/ai-product-kp/` |
 | Смета, НМЦ, обоснование цены | `skills/tenders/tender-estimate-builder/` |
 | Разбор RFP/тендерной документации | `skills/tenders/rfp-responder/` |
+| **Повторный заход к заказчику** по поданному/проигранному тендеру, «что ещё предложить» | `skills/tenders/tender-reentry/` |
 | Коммерческое предложение текстом | `skills/tenders/proposal-writer/` |
 | БТ / БРД | `skills/business-analysis/brd-creation/` |
 | ФТ / ФРС | `skills/business-analysis/frs-creation/` |

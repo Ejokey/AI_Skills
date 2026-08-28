@@ -28,7 +28,7 @@ _deckbuild/
 **Запускать из ASCII-корня репозитория:**
 
 ```bash
-cd "C:\Users\Vladislav\Desktop\Claude folder" && node _deckbuild/build_2b.js && node _deckbuild/render_2b.js
+cd "C:\Users\Vladislav\Desktop\Claude folder" && node _deckbuild/build_<клиент>.js && node _deckbuild/render_<клиент>.js
 ```
 
 Критично: `cwd` должен быть ASCII-корнем. Если предыдущей командой сделали `cd`
@@ -42,7 +42,7 @@ Windows-консоль в cp1251 падает на кириллице и на «
 import zipfile, re
 xml = zipfile.ZipFile(path).read('word/document.xml').decode('utf8')
 txt = re.sub(r'<[^>]+>', '', re.sub(r'</w:p>', '\n', xml))
-open('_deckbuild/out.txt', 'w', encoding='utf8').write(txt)
+open('_deckbuild/tmp_dump.txt', 'w', encoding='utf8').write(txt)
 ```
 
 Если файл не находится по имени из-за кодировки — ищи через `os.listdir()`
@@ -161,7 +161,7 @@ ragged-края и дубли: **скриншоты надо смотреть г
   JPEG-шум по краям текста не даёт чистого чёрного.
 
 **Решение — сгенерировать честный PNG с альфой** пиксельным threshold'ом
-(`_deckbuild/make_white_logo.js`, использует уже установленный Playwright):
+(скрипт на Node с уже установленным Playwright для рендера канваса):
 
 ```js
 const lum = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
@@ -188,7 +188,7 @@ px[i+3] = alpha;
 
 ## 7. Готовые компоненты
 
-Все из реальной колоды 2B Групп, `_deckbuild/build_2b.js`.
+Проверенные на практике переиспользуемые компоненты для колод этого жанра.
 
 ### Роадмап процесса (слайд 2)
 
